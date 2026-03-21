@@ -11,4 +11,4 @@ dmg: build
 	bash scripts/make-dmg.sh
 
 clean:
-	rm -rf .build Lumesent.app Lumesent-Installer.dmg
+	rm -rf .build Lumesent.app Lumesent-*.dmg

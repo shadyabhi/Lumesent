@@ -3,7 +3,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$REPO_ROOT/Lumesent.app"
-DMG_NAME="Lumesent-Installer"
+VERSION="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
+DMG_NAME="Lumesent-${VERSION}"
 DMG_DIR="$REPO_ROOT/.build/dmg"
 DMG_TEMP="$REPO_ROOT/.build/$DMG_NAME-temp.dmg"
 DMG_PATH="$REPO_ROOT/$DMG_NAME.dmg"
