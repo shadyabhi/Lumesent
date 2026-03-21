@@ -790,7 +790,7 @@ struct RuleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header row
+            // Header row (tap icon / summary / spacer / chevron to expand; toggle + trash stay separate)
             HStack(spacing: 10) {
                 Toggle("", isOn: $rule.isEnabled)
                     .labelsHidden()
@@ -798,60 +798,64 @@ struct RuleCard: View {
                     .controlSize(.small)
                     .onChange(of: rule.isEnabled) { _, _ in onSave() }
 
-                ruleAppIcon
-                    .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                HStack(spacing: 10) {
+                    ruleAppIcon
+                        .frame(width: 32, height: 32)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(ruleSummary)
-                            .font(.system(size: 13))
-                            .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(ruleSummary)
+                                .font(.system(size: 13))
+                                .lineLimit(1)
 
-                        if !rule.label.isEmpty {
-                            Text(rule.label)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.1))
-                                .foregroundStyle(Color.accentColor)
-                                .clipShape(Capsule())
-                        }
-
-                        if !matchedEntries.isEmpty {
-                            Button(action: { showingMatches.toggle() }) {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.system(size: 8))
-                                    Text("\(matchedEntries.count)")
-                                        .font(.system(size: 10, weight: .medium))
-                                }
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.green.opacity(0.12))
-                                .foregroundStyle(.green)
-                                .clipShape(Capsule())
+                            if !rule.label.isEmpty {
+                                Text(rule.label)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .foregroundStyle(Color.accentColor)
+                                    .clipShape(Capsule())
                             }
-                            .buttonStyle(.plain)
-                            .help("Show matched notifications")
+
+                            if !matchedEntries.isEmpty {
+                                Button(action: { showingMatches.toggle() }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "bell.fill")
+                                            .font(.system(size: 8))
+                                        Text("\(matchedEntries.count)")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.green.opacity(0.12))
+                                    .foregroundStyle(.green)
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Show matched notifications")
+                            }
+                        }
+
+                        if !rule.isValid {
+                            Text("Configure at least one filter field")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red)
                         }
                     }
 
-                    if !rule.isValid {
-                        Text("Configure at least one filter field")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.red)
-                    }
-                }
+                    Spacer(minLength: 0)
 
-                Spacer()
-
-                Button(action: onToggleEdit) {
                     Image(systemName: isEditing ? "chevron.up" : "chevron.down")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onToggleEdit()
+                }
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
