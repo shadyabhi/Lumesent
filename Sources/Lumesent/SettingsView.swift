@@ -165,7 +165,7 @@ struct SettingsView: View {
                 .toolbar(.hidden)
             }
         }
-        .frame(minWidth: 640, minHeight: 440)
+        .frame(minWidth: 720, minHeight: 440)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -904,8 +904,7 @@ struct RuleCard: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     SuggestingField("App ID:", text: $rule.appIdentifier, placeholder: "e.g. com.apple.mail or slack", history: history, field: .appIdentifier)
-                    HStack(spacing: 4) {
-                        SuggestingField("Title:", text: $rule.titleContains, placeholder: "e.g. urgent", history: history, field: .title)
+                    SuggestingField("Title:", text: $rule.titleContains, placeholder: "e.g. urgent", history: history, field: .title, suggestionLeadingInset: 186) {
                         Picker("", selection: $rule.titleOperator) {
                             ForEach(MatchOperator.allCases, id: \.self) { op in
                                 Text(op.rawValue).tag(op)
@@ -913,8 +912,7 @@ struct RuleCard: View {
                         }
                         .frame(width: 90)
                     }
-                    HStack(spacing: 4) {
-                        SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body)
+                    SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body, suggestionLeadingInset: 186) {
                         Picker("", selection: $rule.bodyOperator) {
                             ForEach(MatchOperator.allCases, id: \.self) { op in
                                 Text(op.rawValue).tag(op)
@@ -1235,22 +1233,27 @@ struct QuickRuleCreator: View {
 
 // MARK: - Suggesting Field
 
-struct SuggestingField: View {
+struct SuggestingField<LabelAccessory: View>: View {
     let label: String
     @Binding var text: String
     let placeholder: String
     @ObservedObject var history: NotificationHistory
     let field: SuggestionField
+    /// Leading inset so suggestion popovers align with the text field (label 80 + spacing 8 = 88; + picker 90 + spacing 8 = 186).
+    let suggestionLeadingInset: CGFloat
+    @ViewBuilder let labelAccessory: () -> LabelAccessory
 
     @FocusState private var isFocused: Bool
     @State private var showSuggestions = false
 
-    init(_ label: String, text: Binding<String>, placeholder: String, history: NotificationHistory, field: SuggestionField) {
+    init(_ label: String, text: Binding<String>, placeholder: String, history: NotificationHistory, field: SuggestionField, suggestionLeadingInset: CGFloat = 88, @ViewBuilder labelAccessory: @escaping () -> LabelAccessory) {
         self.label = label
         self._text = text
         self.placeholder = placeholder
         self.history = history
         self.field = field
+        self.suggestionLeadingInset = suggestionLeadingInset
+        self.labelAccessory = labelAccessory
     }
 
     private var suggestions: [Suggestion] {
@@ -1259,14 +1262,16 @@ struct SuggestingField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 Text(label)
                     .frame(width: 80, alignment: .trailing)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                labelAccessory()
                 TextField(placeholder, text: $text)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
+                    .frame(minWidth: 280, maxWidth: .infinity)
                     .focused($isFocused)
                     .onChange(of: isFocused) { _, focused in
                         if focused {
@@ -1284,7 +1289,7 @@ struct SuggestingField: View {
 
             if showSuggestions && !suggestions.isEmpty {
                 HStack(spacing: 0) {
-                    Spacer().frame(width: 84)
+                    Spacer().frame(width: suggestionLeadingInset)
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(suggestions.prefix(5))) { suggestion in
                             SuggestionRow(suggestion: suggestion) {
@@ -1308,6 +1313,12 @@ struct SuggestingField: View {
                 .padding(.top, 2)
             }
         }
+    }
+}
+
+extension SuggestingField where LabelAccessory == EmptyView {
+    init(_ label: String, text: Binding<String>, placeholder: String, history: NotificationHistory, field: SuggestionField) {
+        self.init(label, text: text, placeholder: placeholder, history: history, field: field, suggestionLeadingInset: 88, labelAccessory: { EmptyView() })
     }
 }
 
@@ -1797,7 +1808,7 @@ struct LabelSuggestingField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("Label:")
                     .frame(width: 80, alignment: .trailing)
                     .font(.system(size: 12))
@@ -1805,6 +1816,7 @@ struct LabelSuggestingField: View {
                 TextField("e.g. work, personal", text: $text)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
+                    .frame(minWidth: 280, maxWidth: .infinity)
                     .focused($isFocused)
                     .onChange(of: isFocused) { _, focused in
                         if focused {
@@ -1822,7 +1834,7 @@ struct LabelSuggestingField: View {
 
             if showSuggestions && !filteredLabels.isEmpty {
                 HStack(spacing: 0) {
-                    Spacer().frame(width: 84)
+                    Spacer().frame(width: 88)
                     HStack(spacing: 4) {
                         ForEach(filteredLabels, id: \.self) { label in
                             Button(action: {
