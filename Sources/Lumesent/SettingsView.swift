@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var appSettings: AppSettings
     @ObservedObject var history: NotificationHistory
+    @ObservedObject var permissionChecker: PermissionChecker
     let onRulesChanged: ([FilterRule]) -> Void
 
     @State private var selectedTab: SettingsTab = .rules
@@ -16,15 +17,21 @@ struct SettingsView: View {
         case unmatched
     }
 
-    init(ruleStore: RuleStore, appSettings: AppSettings, history: NotificationHistory, onRulesChanged: @escaping ([FilterRule]) -> Void) {
+    init(ruleStore: RuleStore, appSettings: AppSettings, history: NotificationHistory, permissionChecker: PermissionChecker, onRulesChanged: @escaping ([FilterRule]) -> Void) {
         self.ruleStore = ruleStore
         self.appSettings = appSettings
         self.history = history
+        self.permissionChecker = permissionChecker
         self.onRulesChanged = onRulesChanged
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Permission banner when broken — unmissable, right at the top
+            if !permissionChecker.allGranted {
+                PermissionBanner(permissionChecker: permissionChecker)
+            }
+
             // Tab bar
             HStack(spacing: 0) {
                 TabButton(title: "Rules", systemImage: "list.bullet.rectangle.portrait", isSelected: selectedTab == .rules) {
@@ -34,6 +41,10 @@ struct SettingsView: View {
                     selectedTab = .unmatched
                 }
                 Spacer()
+
+                if permissionChecker.allGranted {
+                    PermissionOKIndicator(permissionChecker: permissionChecker)
+                }
 
                 Button(action: { showingSettings.toggle() }) {
                     Image(systemName: "gearshape")
@@ -65,6 +76,161 @@ struct SettingsView: View {
             GeneralTab(appSettings: appSettings)
                 .frame(width: 400, height: 250)
         }
+    }
+}
+
+// MARK: - Permission OK Indicator (compact, top-right)
+
+struct PermissionOKIndicator: View {
+    @ObservedObject var permissionChecker: PermissionChecker
+    @State private var showingDetail = false
+    @State private var isChecking = false
+
+    var body: some View {
+        Button(action: {
+            isChecking = true
+            permissionChecker.check()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isChecking = false
+                showingDetail = true
+            }
+        }) {
+            Group {
+                if isChecking {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.6)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.green)
+                }
+            }
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Permission status — click to check")
+        .popover(isPresented: $showingDetail, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Status")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                PermissionStatusRow(label: "Full Disk Access", ok: permissionChecker.hasFullDiskAccess)
+                PermissionStatusRow(label: "Accessibility", ok: permissionChecker.hasAccessibility)
+            }
+            .padding(12)
+            .frame(width: 200)
+        }
+    }
+}
+
+struct PermissionStatusRow: View {
+    let label: String
+    let ok: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(ok ? .green : .red)
+            Text(label)
+                .font(.system(size: 12))
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Permission Banner
+
+struct PermissionBanner: View {
+    @ObservedObject var permissionChecker: PermissionChecker
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 18))
+                Text("Lumesent needs permissions to work")
+                    .font(.system(size: 14, weight: .bold))
+            }
+
+            VStack(spacing: 8) {
+                if !permissionChecker.hasFullDiskAccess {
+                    PermissionRow(
+                        title: "Full Disk Access",
+                        description: "Required to read the notification database.",
+                        action: {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+                        }
+                    )
+                }
+
+                if !permissionChecker.hasAccessibility {
+                    PermissionRow(
+                        title: "Accessibility",
+                        description: "Required for real-time notification detection.",
+                        action: {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                    )
+                }
+            }
+
+            Text("Grant permissions in System Settings, then return here. This banner disappears automatically.")
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(
+                colors: [Color.red, Color.orange],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+        .foregroundStyle(.white)
+    }
+}
+
+struct PermissionRow: View {
+    let title: String
+    let description: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.9))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+
+            Spacer()
+
+            Button(action: action) {
+                Text("Open Settings")
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.25))
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.white.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,7 +9,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var ruleStore: RuleStore!
     private var appSettings: AppSettings!
     private var notificationHistory: NotificationHistory!
+    private var permissionChecker: PermissionChecker!
     private var settingsWindow: NSWindow?
+    private var permissionObservation: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
@@ -17,11 +20,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appSettings = AppSettings()
         notificationHistory = NotificationHistory()
         filterEngine = FilterEngine(rules: ruleStore.rules)
+        permissionChecker = PermissionChecker()
+
+        // Update menu bar icon when permissions change
+        permissionObservation = permissionChecker.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateMenuBarIcon() }
+        }
+        updateMenuBarIcon()
 
         monitor = NotificationMonitor { [weak self] record in
             self?.handleNewNotification(record)
         }
         monitor.start()
+
+        // Auto-open settings if permissions are missing on first launch
+        if !permissionChecker.allGranted {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.openSettings()
+            }
+        }
+    }
+
+    private func updateMenuBarIcon() {
+        guard let button = statusItem?.button else { return }
+        let iconName: String
+        if permissionChecker.allGranted {
+            iconName = "bell.badge"
+        } else if permissionChecker.hasFullDiskAccess {
+            iconName = "bell.badge.exclamationmark"  // degraded — missing accessibility
+        } else {
+            iconName = "bell.slash"  // broken — can't read DB
+        }
+        button.image = NSImage(systemSymbolName: iconName, accessibilityDescription: "Lumesent")
     }
 
     private func setupMenuBar() {
@@ -56,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let settingsView = SettingsView(ruleStore: ruleStore, appSettings: appSettings, history: notificationHistory) { [weak self] updatedRules in
+        let settingsView = SettingsView(ruleStore: ruleStore, appSettings: appSettings, history: notificationHistory, permissionChecker: permissionChecker) { [weak self] updatedRules in
             self?.filterEngine.rules = updatedRules
         }
 

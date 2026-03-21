@@ -182,7 +182,12 @@ final class NotificationMonitor {
 
     private func startFallbackTimer() {
         fallbackTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.fetchNewNotifications()
+            guard let self = self else { return }
+            // Retry accessibility observer if not yet set up
+            if self.axObserver == nil && AXIsProcessTrusted() {
+                self.startAccessibilityObserver()
+            }
+            self.fetchNewNotifications()
         }
     }
 
