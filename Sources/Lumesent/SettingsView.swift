@@ -923,7 +923,19 @@ struct RuleCard: View {
 
                     DisplayModePicker(displayMode: $rule.displayMode)
 
-                    Toggle("Focus source on dismiss", isOn: $rule.focusSourceOnDismiss)
+                    HStack {
+                        Text("On dismiss:")
+                            .frame(width: 80, alignment: .trailing)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+
+                        Picker("", selection: $rule.focusSourceOnDismiss) {
+                            Text("Focus source").tag(true)
+                            Text("Nothing").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 180)
+                    }
 
                     HStack {
                         Button("Test this rule") {

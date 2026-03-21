@@ -89,8 +89,13 @@ final class NotificationMonitor: ObservableObject {
         AppLog.shared.info("initialized, last rec_id = \(self.lastSeenRecId, privacy: .public)")
     }
 
-    func fetchNewNotifications() {
-        guard let db else { return }
+    /// Returns `true` if at least one new notification was found.
+    @discardableResult
+    func fetchNewNotifications() -> Bool {
+        guard let db else { return false }
+
+        // Ensure we see the latest WAL frames by resetting the read transaction.
+        sqlite3_exec(db, "BEGIN; END;", nil, nil, nil)
 
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
@@ -108,10 +113,11 @@ final class NotificationMonitor: ObservableObject {
             AppLog.shared.notice("Failed to prepare query: \(msg, privacy: .public)")
             DispatchQueue.main.async { self.databaseStatus = .temporarilyUnavailable }
             closeDatabase()
-            return
+            return false
         }
 
         sqlite3_bind_int64(stmt, 1, lastSeenRecId)
+        var foundAny = false
 
         while sqlite3_step(stmt) == SQLITE_ROW {
             let recId = sqlite3_column_int64(stmt, 0)
@@ -148,10 +154,12 @@ final class NotificationMonitor: ObservableObject {
                 deliveredDate: deliveredDate
             )
 
+            foundAny = true
             lastSeenRecId = recId
             AppLog.shared.debug("new notification from \(appIdentifier, privacy: .public): \(title, privacy: .public)")
             onNewNotification(record)
         }
+        return foundAny
     }
 
     private func parsePlist(_ data: Data) -> (title: String, body: String) {
@@ -187,7 +195,13 @@ final class NotificationMonitor: ObservableObject {
             guard let refcon else { return }
             let monitor = Unmanaged<NotificationMonitor>.fromOpaque(refcon).takeUnretainedValue()
             DispatchQueue.main.async {
-                monitor.fetchNewNotifications()
+                let found = monitor.fetchNewNotifications()
+                if !found {
+                    // DB row may not be committed yet; retry once after a short delay.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        monitor.fetchNewNotifications()
+                    }
+                }
             }
         }
 
@@ -224,8 +238,8 @@ final class NotificationMonitor: ObservableObject {
     // MARK: - Fallback Timer
 
     private func startFallbackTimer() {
-        AppLog.shared.info("fallback poll timer started (5s interval)")
-        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        AppLog.shared.info("fallback poll timer started (2s interval)")
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             guard let self else { return }
             if self.axObserver == nil && AXIsProcessTrusted() {
                 AppLog.shared.info("fallback timer: AX now trusted, retrying observer setup")
