@@ -10,11 +10,11 @@ struct SettingsView: View {
     let onRulesChanged: ([FilterRule]) -> Void
 
     @State private var selectedTab: SettingsTab = .rules
-    @State private var showingSettings = false
 
     enum SettingsTab: Hashable {
         case rules
         case unmatched
+        case settings
     }
 
     init(ruleStore: RuleStore, appSettings: AppSettings, history: NotificationHistory, permissionChecker: PermissionChecker, onRulesChanged: @escaping ([FilterRule]) -> Void) {
@@ -46,15 +46,9 @@ struct SettingsView: View {
                     PermissionOKIndicator(permissionChecker: permissionChecker)
                 }
 
-                Button(action: { showingSettings.toggle() }) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                        .contentShape(Rectangle())
+                TabButton(title: "Settings", systemImage: "gearshape", isSelected: selectedTab == .settings) {
+                    selectedTab = .settings
                 }
-                .buttonStyle(.plain)
-                .help("Settings")
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -68,14 +62,12 @@ struct SettingsView: View {
                 RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged)
             case .unmatched:
                 UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+            case .settings:
+                GeneralTab(appSettings: appSettings)
             }
         }
         .frame(minWidth: 580, minHeight: 400)
         .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(isPresented: $showingSettings) {
-            GeneralTab(appSettings: appSettings)
-                .frame(width: 400, height: 250)
-        }
     }
 }
 
@@ -1103,76 +1095,75 @@ struct NotificationPreview: View {
 
 struct GeneralTab: View {
     @ObservedObject var appSettings: AppSettings
-    @Environment(\.dismiss) private var dismiss
     @State private var showingServiceStatus = false
     @State private var serviceStatusMessage = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("Settings")
-                    .font(.system(size: 16, weight: .semibold))
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 16) {
+                // Dismiss Shortcut section
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Dismiss Shortcut", systemImage: "keyboard")
+                        .font(.system(size: 13, weight: .semibold))
+
+                    Text("Set a keyboard shortcut to dismiss alerts. Clicking always works too.")
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
+                        .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Dismiss Shortcut")
-                    .font(.system(size: 14, weight: .semibold))
+                    HStack(spacing: 12) {
+                        KeyCaptureButton(shortcut: $appSettings.dismissKey)
 
-                Text("Alerts can always be dismissed by clicking. Optionally set a keyboard shortcut to dismiss alerts.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 12) {
-                    KeyCaptureButton(shortcut: $appSettings.dismissKey)
-
-                    if appSettings.dismissKey != nil {
-                        Button("Clear") {
-                            appSettings.dismissKey = nil
-                            appSettings.save()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                }
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Login Service")
-                    .font(.system(size: 14, weight: .semibold))
-
-                Toggle(isOn: Binding(
-                    get: { ServiceManager.isInstalled },
-                    set: { newValue in
-                        do {
-                            if newValue {
-                                try ServiceManager.install()
-                                serviceStatusMessage = "Lumesent will now start automatically on login and restart on crash."
-                            } else {
-                                try ServiceManager.uninstall()
-                                serviceStatusMessage = "Login service removed."
+                        if appSettings.dismissKey != nil {
+                            Button("Clear") {
+                                appSettings.dismissKey = nil
+                                appSettings.save()
                             }
-                        } catch {
-                            serviceStatusMessage = "Error: \(error.localizedDescription)"
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
-                        showingServiceStatus = true
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Start at Login")
-                        Text("Runs as a background service with crash recovery")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
                     }
                 }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Login Service section
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Login Service", systemImage: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+
+                    Toggle(isOn: Binding(
+                        get: { ServiceManager.isInstalled },
+                        set: { newValue in
+                            do {
+                                if newValue {
+                                    try ServiceManager.install()
+                                    serviceStatusMessage = "Lumesent will now start automatically on login and restart on crash."
+                                } else {
+                                    try ServiceManager.uninstall()
+                                    serviceStatusMessage = "Login service removed."
+                                }
+                            } catch {
+                                serviceStatusMessage = "Error: \(error.localizedDescription)"
+                            }
+                            showingServiceStatus = true
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Start at Login")
+                                .font(.system(size: 13))
+                            Text("Runs as a background service with crash recovery")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
             Spacer()
