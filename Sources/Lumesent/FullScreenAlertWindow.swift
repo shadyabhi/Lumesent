@@ -41,7 +41,7 @@ final class FullScreenAlertWindow {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.ignoresMouseEvents = false
 
-            let isSticky = displayMode.isSicky
+            let isSticky = displayMode.isSticky
             let alertView = FullScreenAlertView(
                 notification: notification,
                 isSticky: isSticky,
@@ -83,8 +83,7 @@ final class FullScreenAlertWindow {
 
         if let dismissKey {
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                let mask: UInt = 0x00F_E0000
-                if dismissKey.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue) & mask) {
+                if dismissKey.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) {
                     dismiss()
                 }
                 return event

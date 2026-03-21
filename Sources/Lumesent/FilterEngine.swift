@@ -7,14 +7,8 @@ class FilterEngine {
         self.rules = rules
     }
 
-    func shouldAlert(for notification: NotificationRecord) -> Bool {
-        matchingRule(for: notification) != nil
-    }
-
     func matchingRule(for notification: NotificationRecord) -> FilterRule? {
-        rules.filter(\.isEnabled).filter(\.isValid).first { rule in
-            matchesRule(notification, rule)
-        }
+        rules.first { $0.isEnabled && $0.isValid && matchesRule(notification, $0) }
     }
 
     private func matchesRule(_ n: NotificationRecord, _ r: FilterRule) -> Bool {

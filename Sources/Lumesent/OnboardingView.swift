@@ -108,7 +108,7 @@ struct OnboardingView: View {
 }
 
 enum OnboardingState {
-    static let completedKey = "Lumesent.onboarding.v1.completed"
+    private static let completedKey = "Lumesent.onboarding.v1.completed"
 
     static var hasCompleted: Bool {
         UserDefaults.standard.bool(forKey: completedKey)

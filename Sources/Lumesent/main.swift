@@ -1,5 +1,9 @@
 import AppKit
 
+extension Notification.Name {
+    static let lumesentOpenSettings = Notification.Name("com.shadyabhi.Lumesent.openSettings")
+}
+
 // Single-instance check: if already running, signal existing instance to open settings
 let bundleId = "com.shadyabhi.Lumesent"
 let myPID = ProcessInfo.processInfo.processIdentifier
@@ -8,7 +12,7 @@ let runningInstances = NSRunningApplication.runningApplications(withBundleIdenti
 
 if runningInstances.first != nil {
     DistributedNotificationCenter.default().postNotificationName(
-        .init("\(bundleId).openSettings"),
+        .lumesentOpenSettings,
         object: nil)
     usleep(500_000)
 

@@ -6,10 +6,7 @@ class RuleStore: ObservableObject {
     private let fileURL: URL
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Lumesent", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("rules.json")
+        fileURL = FileLocations.appSupportDirectory.appendingPathComponent("rules.json")
         load()
     }
 

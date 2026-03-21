@@ -855,7 +855,7 @@ struct RuleCard: View {
                         SuggestingField("Title:", text: $rule.titleContains, placeholder: "e.g. urgent", history: history, field: .title)
                         Picker("", selection: $rule.titleOperator) {
                             ForEach(MatchOperator.allCases, id: \.self) { op in
-                                Text(op.displayName).tag(op)
+                                Text(op.rawValue).tag(op)
                             }
                         }
                         .frame(width: 90)
@@ -864,7 +864,7 @@ struct RuleCard: View {
                         SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body)
                         Picker("", selection: $rule.bodyOperator) {
                             ForEach(MatchOperator.allCases, id: \.self) { op in
-                                Text(op.displayName).tag(op)
+                                Text(op.rawValue).tag(op)
                             }
                         }
                         .frame(width: 90)
@@ -902,8 +902,8 @@ struct RuleCard: View {
     private var ruleSummary: String {
         var parts: [String] = []
         if !rule.appIdentifier.isEmpty { parts.append("app: \(rule.appIdentifier)") }
-        if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.displayName) \"\(rule.titleContains)\"") }
-        if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.displayName) \"\(rule.bodyContains)\"") }
+        if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.rawValue) \"\(rule.titleContains)\"") }
+        if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.rawValue) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
     }
 
@@ -932,7 +932,7 @@ struct MatchedNotificationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            appIcon
+            AppIconView(bundleIdentifier: entry.appIdentifier)
                 .frame(width: 24, height: 24)
                 .clipShape(RoundedRectangle(cornerRadius: 5))
 
@@ -961,19 +961,6 @@ struct MatchedNotificationRow: View {
         .padding(.horizontal, 8)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 5))
-    }
-
-    @ViewBuilder
-    private var appIcon: some View {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: entry.appIdentifier),
-           let icon = NSWorkspace.shared.icon(forFile: url.path) as NSImage? {
-            Image(nsImage: icon)
-                .resizable()
-        } else {
-            Image(systemName: "app.fill")
-                .resizable()
-                .foregroundStyle(.secondary)
-        }
     }
 }
 
@@ -1028,7 +1015,7 @@ struct UnmatchedRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            appIcon
+            AppIconView(bundleIdentifier: entry.appIdentifier)
                 .frame(width: 32, height: 32)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
 
@@ -1078,19 +1065,6 @@ struct UnmatchedRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
-    }
-
-    @ViewBuilder
-    private var appIcon: some View {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: entry.appIdentifier),
-           let icon = NSWorkspace.shared.icon(forFile: url.path) as NSImage? {
-            Image(nsImage: icon)
-                .resizable()
-        } else {
-            Image(systemName: "app.fill")
-                .resizable()
-                .foregroundStyle(.secondary)
-        }
     }
 }
 
@@ -1327,7 +1301,7 @@ struct NotificationPreview: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            appIcon
+            AppIconView(bundleIdentifier: entry.appIdentifier)
                 .frame(width: 36, height: 36)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -1359,19 +1333,6 @@ struct NotificationPreview: View {
         .padding(12)
         .frame(width: 300, alignment: .leading)
         .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    @ViewBuilder
-    private var appIcon: some View {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: entry.appIdentifier),
-           let icon = NSWorkspace.shared.icon(forFile: url.path) as NSImage? {
-            Image(nsImage: icon)
-                .resizable()
-        } else {
-            Image(systemName: "app.fill")
-                .resizable()
-                .foregroundStyle(.secondary)
-        }
     }
 }
 
@@ -1831,7 +1792,7 @@ struct DisplayModePicker: View {
     @Binding var displayMode: AlertDisplayMode
 
     private var isSticky: Bool {
-        displayMode.isSicky
+        displayMode.isSticky
     }
 
     private var timeoutText: String {
@@ -1843,8 +1804,6 @@ struct DisplayModePicker: View {
         }
         return "8"
     }
-
-    @State private var editingTimeout: String = ""
 
     var body: some View {
         HStack {

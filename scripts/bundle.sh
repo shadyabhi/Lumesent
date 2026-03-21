@@ -52,30 +52,12 @@ else
   CS_EXTRA=(--timestamp=none)
 fi
 
-ARCH="$(uname -m)"
-case "$ARCH" in
-  arm64) TRIPLE="arm64-apple-macosx" ;;
-  x86_64) TRIPLE="x86_64-apple-macosx" ;;
-  *) TRIPLE="arm64-apple-macosx" ;;
-esac
-SPARKLE_FW="$REPO_ROOT/.build/$TRIPLE/release/Sparkle.framework"
-
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
-mkdir -p "$APP/Contents/Frameworks"
 
 cp "$BUILD_DIR/Lumesent" "$APP/Contents/MacOS/Lumesent"
 sed "s/__VERSION__/$VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
-
-if [[ -d "$SPARKLE_FW" ]]; then
-  cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/"
-  SPARKLE_BIN="$APP/Contents/Frameworks/Sparkle.framework/Versions/Current/Sparkle"
-  if [[ -f "$SPARKLE_BIN" ]]; then
-    codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$SPARKLE_BIN" 2>/dev/null || true
-  fi
-  codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
-fi
 
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/MacOS/Lumesent"
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP"

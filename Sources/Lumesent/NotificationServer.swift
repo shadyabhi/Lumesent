@@ -20,10 +20,7 @@ final class NotificationServer {
     private let onNotification: (ExternalNotification) -> Void
 
     init(onNotification: @escaping (ExternalNotification) -> Void) {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Lumesent")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        self.socketPath = dir.appendingPathComponent("notify.sock").path
+        self.socketPath = FileLocations.appSupportDirectory.appendingPathComponent("notify.sock").path
         self.onNotification = onNotification
     }
 

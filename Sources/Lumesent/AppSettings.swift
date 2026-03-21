@@ -36,10 +36,7 @@ class AppSettings: ObservableObject {
     private let fileURL: URL
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Lumesent", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("settings.json")
+        fileURL = FileLocations.appSupportDirectory.appendingPathComponent("settings.json")
         load()
     }
 

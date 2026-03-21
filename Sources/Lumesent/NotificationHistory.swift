@@ -14,13 +14,11 @@ struct HistoryEntry: Codable, Identifiable {
 class NotificationHistory: ObservableObject {
     @Published private(set) var entries: [HistoryEntry] = []
 
+    private static let maxEntries = 1000
     private let fileURL: URL
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Lumesent", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("history.json")
+        fileURL = FileLocations.appSupportDirectory.appendingPathComponent("history.json")
         load()
     }
 
@@ -36,10 +34,8 @@ class NotificationHistory: ObservableObject {
         )
         entries.append(entry)
 
-        // Cap so history.json stays bounded
-        let maxEntries = 1000
-        if entries.count > maxEntries {
-            entries = Array(entries.suffix(maxEntries))
+        if entries.count > Self.maxEntries {
+            entries = Array(entries.suffix(Self.maxEntries))
         }
 
         save()
@@ -47,11 +43,7 @@ class NotificationHistory: ObservableObject {
 
     /// Most recent matched notifications (any rule), for menu previews.
     func recentMatches(count: Int) -> [HistoryEntry] {
-        entries
-            .filter(\.matched)
-            .sorted { $0.date > $1.date }
-            .prefix(count)
-            .map { $0 }
+        Array(entries.filter(\.matched).sorted { $0.date > $1.date }.prefix(count))
     }
 
     /// Returns matched entries for a specific rule, most recent first.
@@ -125,9 +117,8 @@ private extension NotificationHistory {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data)
         else { return }
-        let maxEntries = 1000
-        entries = decoded.count > maxEntries ? Array(decoded.suffix(maxEntries)) : decoded
-        if decoded.count > maxEntries {
+        entries = decoded.count > Self.maxEntries ? Array(decoded.suffix(Self.maxEntries)) : decoded
+        if decoded.count > Self.maxEntries {
             save()
         }
     }

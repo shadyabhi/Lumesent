@@ -22,14 +22,12 @@ final class NotificationMonitor: ObservableObject {
     private var didPrimeLastSeenId = false
     private var fallbackTimer: Timer?
     private var axObserver: AXObserver?
-
-    private var dbPath: String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
-    }
+    private let dbPath: String
 
     init(onNewNotification: @escaping (NotificationRecord) -> Void) {
         self.onNewNotification = onNewNotification
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        self.dbPath = "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
     }
 
     func start() {

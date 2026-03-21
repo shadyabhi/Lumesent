@@ -5,14 +5,6 @@ enum MatchOperator: String, Codable, CaseIterable, Equatable {
     case regex = "regex"
     case equals = "equals"
 
-    var displayName: String {
-        switch self {
-        case .contains: return "contains"
-        case .regex: return "regex"
-        case .equals: return "equals"
-        }
-    }
-
     func matches(_ haystack: String, _ needle: String) -> Bool {
         switch self {
         case .contains:
@@ -35,7 +27,7 @@ enum AlertDisplayMode: Codable, Equatable {
 
     static let defaultTimed = AlertDisplayMode.timed(seconds: 8)
 
-    var isSicky: Bool {
+    var isSticky: Bool {
         if case .sticky = self { return true }
         return false
     }

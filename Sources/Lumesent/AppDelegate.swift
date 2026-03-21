@@ -71,7 +71,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyActivationPolicyFromSettings()
-                self?.appSettings.save()
             }
             .store(in: &cancellables)
 
@@ -79,7 +78,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.registerGlobalSettingsHotkey()
-                self?.appSettings.save()
             }
             .store(in: &cancellables)
 
@@ -91,12 +89,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerGlobalSettingsHotkey()
         updateMenuBarIcon()
 
-        NotificationFallback.requestAuthorizationIfNeeded()
-
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(openSettings),
-            name: .init("com.shadyabhi.Lumesent.openSettings"),
+            name: .lumesentOpenSettings,
             object: nil)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
@@ -133,9 +129,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard AXIsProcessTrustedWithOptions(axOpts) else { return }
         guard let shortcut = appSettings.openSettingsHotkey else { return }
         globalSettingsHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let mask: UInt = 0x00F_E0000
-            let flags = UInt(event.modifierFlags.rawValue) & mask
-            guard shortcut.matches(keyCode: event.keyCode, modifierFlags: flags) else { return }
+            guard shortcut.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) else { return }
             DispatchQueue.main.async { self?.openSettings() }
         }
     }
@@ -203,7 +197,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             truncatedHeadline = headlineSource
         }
-        let when = relativeTimeMenu(entry.date)
+        let when = relativeTime(entry.date)
         let headline = "\(truncatedHeadline)  —  \(when)"
 
         let parent = NSMenuItem(title: headline, action: #selector(replayHistoryEntry(_:)), keyEquivalent: "")
@@ -300,10 +294,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         if appSettings.isPauseActive, let until = appSettings.pauseAlertsUntil {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
             let item = NSMenuItem(
-                title: "Alerts paused until \(formatter.localizedString(for: until, relativeTo: Date()))",
+                title: "Alerts paused (\(relativeTime(until)))",
                 action: nil,
                 keyEquivalent: "")
             item.isEnabled = false
@@ -361,7 +353,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode) {
-        NotificationFallback.postEcho(for: record)
         FullScreenAlertWindow.show(
             notification: record,
             displayMode: displayMode,
@@ -479,10 +470,4 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func quit() {
         NSApp.terminate(nil)
     }
-}
-
-private func relativeTimeMenu(_ date: Date) -> String {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .abbreviated
-    return formatter.localizedString(for: date, relativeTo: Date())
 }
