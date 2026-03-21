@@ -8,6 +8,7 @@ struct HistoryEntry: Codable, Identifiable {
     let body: String
     let date: Date
     var matched: Bool = false
+    var matchedRuleId: UUID? = nil
 }
 
 class NotificationHistory: ObservableObject {
@@ -23,14 +24,15 @@ class NotificationHistory: ObservableObject {
         load()
     }
 
-    func record(_ notification: NotificationRecord, matched: Bool) {
+    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleId: UUID? = nil) {
         let entry = HistoryEntry(
             appIdentifier: notification.appIdentifier,
             appName: notification.appName,
             title: notification.title,
             body: notification.body,
             date: notification.deliveredDate,
-            matched: matched
+            matched: matched,
+            matchedRuleId: matchedRuleId
         )
         entries.append(entry)
 
@@ -40,6 +42,11 @@ class NotificationHistory: ObservableObject {
         }
 
         save()
+    }
+
+    /// Returns matched entries for a specific rule, most recent first.
+    func matchedEntries(for ruleId: UUID) -> [HistoryEntry] {
+        entries.filter { $0.matchedRuleId == ruleId }.reversed()
     }
 
     /// Returns suggestions for a given field, deduplicated by value, most recent first.

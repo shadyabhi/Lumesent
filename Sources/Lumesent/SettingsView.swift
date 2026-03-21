@@ -9,11 +9,11 @@ struct SettingsView: View {
     let onRulesChanged: ([FilterRule]) -> Void
 
     @State private var selectedTab: SettingsTab = .rules
+    @State private var showingSettings = false
 
     enum SettingsTab: Hashable {
         case rules
         case unmatched
-        case general
     }
 
     init(ruleStore: RuleStore, appSettings: AppSettings, history: NotificationHistory, onRulesChanged: @escaping ([FilterRule]) -> Void) {
@@ -33,10 +33,17 @@ struct SettingsView: View {
                 TabButton(title: "Unmatched", systemImage: "bell.slash", isSelected: selectedTab == .unmatched) {
                     selectedTab = .unmatched
                 }
-                TabButton(title: "General", systemImage: "gearshape", isSelected: selectedTab == .general) {
-                    selectedTab = .general
-                }
                 Spacer()
+
+                Button(action: { showingSettings.toggle() }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -50,12 +57,14 @@ struct SettingsView: View {
                 RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged)
             case .unmatched:
                 UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
-            case .general:
-                GeneralTab(appSettings: appSettings)
             }
         }
         .frame(minWidth: 580, minHeight: 400)
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $showingSettings) {
+            GeneralTab(appSettings: appSettings)
+                .frame(width: 400, height: 250)
+        }
     }
 }
 
@@ -169,6 +178,7 @@ struct RulesTab: View {
                                     rule: $ruleStore.rules[index],
                                     isEditing: editingRule?.id == rule.id,
                                     history: history,
+                                    allLabels: allLabels,
                                     onToggleEdit: {
                                         editingRule = (editingRule?.id == rule.id) ? nil : rule
                                     },
@@ -255,9 +265,16 @@ struct RuleCard: View {
     @Binding var rule: FilterRule
     let isEditing: Bool
     @ObservedObject var history: NotificationHistory
+    let allLabels: [String]
     let onToggleEdit: () -> Void
     let onDelete: () -> Void
     let onSave: () -> Void
+
+    @State private var showingMatches = false
+
+    private var matchedEntries: [HistoryEntry] {
+        history.matchedEntries(for: rule.id)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -283,6 +300,24 @@ struct RuleCard: View {
                                 .background(Color.accentColor.opacity(0.1))
                                 .foregroundStyle(Color.accentColor)
                                 .clipShape(Capsule())
+                        }
+
+                        if !matchedEntries.isEmpty {
+                            Button(action: { showingMatches.toggle() }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 8))
+                                    Text("\(matchedEntries.count)")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.12))
+                                .foregroundStyle(.green)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Show matched notifications")
                         }
                     }
 
@@ -312,6 +347,36 @@ struct RuleCard: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
 
+            // Matched notifications panel
+            if showingMatches {
+                Divider()
+                    .padding(.horizontal, 14)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Recent Matches")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(matchedEntries.count) total")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    ForEach(Array(matchedEntries.prefix(5))) { entry in
+                        MatchedNotificationRow(entry: entry)
+                    }
+
+                    if matchedEntries.count > 5 {
+                        Text("+ \(matchedEntries.count - 5) more")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                }
+                .padding(14)
+            }
+
             // Edit panel
             if isEditing {
                 Divider()
@@ -338,15 +403,7 @@ struct RuleCard: View {
                         .frame(width: 90)
                     }
 
-                    HStack {
-                        Text("Label:")
-                            .frame(width: 80, alignment: .trailing)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                        TextField("e.g. work, personal", text: $rule.label)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12))
-                    }
+                    LabelSuggestingField(text: $rule.label, allLabels: allLabels)
 
                     DisplayModePicker(displayMode: $rule.displayMode)
 
@@ -374,6 +431,58 @@ struct RuleCard: View {
         if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.displayName) \"\(rule.titleContains)\"") }
         if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.displayName) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
+    }
+}
+
+// MARK: - Matched Notification Row
+
+struct MatchedNotificationRow: View {
+    let entry: HistoryEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            appIcon
+                .frame(width: 24, height: 24)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack {
+                    if !entry.title.isEmpty {
+                        Text(entry.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Text(relativeTime(entry.date))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if !entry.body.isEmpty {
+                    Text(entry.body)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    @ViewBuilder
+    private var appIcon: some View {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: entry.appIdentifier),
+           let icon = NSWorkspace.shared.icon(forFile: url.path) as NSImage? {
+            Image(nsImage: icon)
+                .resizable()
+        } else {
+            Image(systemName: "app.fill")
+                .resizable()
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -506,6 +615,10 @@ struct QuickRuleCreator: View {
     @State private var useBody = false
     @State private var label = ""
 
+    private var allLabels: [String] {
+        Set(ruleStore.rules.compactMap { $0.label.isEmpty ? nil : $0.label }).sorted()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Create Rule")
@@ -556,13 +669,7 @@ struct QuickRuleCreator: View {
                 }
             }
 
-            HStack {
-                Text("Label:")
-                    .font(.system(size: 12, weight: .medium))
-                TextField("optional", text: $label)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
-            }
+            LabelSuggestingField(text: $label, allLabels: allLabels)
 
             HStack {
                 Spacer()
@@ -780,9 +887,22 @@ struct NotificationPreview: View {
 
 struct GeneralTab: View {
     @ObservedObject var appSettings: AppSettings
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Dismiss Shortcut")
                     .font(.system(size: 14, weight: .semibold))
@@ -931,6 +1051,81 @@ final class KeyCaptureNSButton: NSButton {
         }
 
         return parts.joined()
+    }
+}
+
+// MARK: - Label Suggesting Field
+
+struct LabelSuggestingField: View {
+    @Binding var text: String
+    let allLabels: [String]
+
+    @FocusState private var isFocused: Bool
+    @State private var showSuggestions = false
+
+    private var filteredLabels: [String] {
+        if text.isEmpty {
+            return allLabels
+        }
+        let q = text.lowercased()
+        return allLabels.filter { $0.lowercased().contains(q) && $0 != text }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Label:")
+                    .frame(width: 80, alignment: .trailing)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                TextField("e.g. work, personal", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .focused($isFocused)
+                    .onChange(of: isFocused) { _, focused in
+                        if focused {
+                            showSuggestions = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                showSuggestions = false
+                            }
+                        }
+                    }
+                    .onChange(of: text) { _, _ in
+                        showSuggestions = isFocused
+                    }
+            }
+
+            if showSuggestions && !filteredLabels.isEmpty {
+                HStack(spacing: 0) {
+                    Spacer().frame(width: 84)
+                    HStack(spacing: 4) {
+                        ForEach(filteredLabels, id: \.self) { label in
+                            Button(action: {
+                                text = label
+                                showSuggestions = false
+                            }) {
+                                Text(label)
+                                    .font(.system(size: 11))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .clipShape(Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { hovering in
+                                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
     }
 }
 

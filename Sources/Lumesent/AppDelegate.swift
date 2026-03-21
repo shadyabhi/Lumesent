@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleNewNotification(_ record: NotificationRecord) {
         let matchedRule = filterEngine.matchingRule(for: record)
-        notificationHistory.record(record, matched: matchedRule != nil)
+        notificationHistory.record(record, matched: matchedRule != nil, matchedRuleId: matchedRule?.id)
 
         guard let rule = matchedRule else {
             NSLog("Lumesent: notification did NOT match any rule: %@", record.title)
