@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -version)",
+      "Bash(sqlite3:*)",
+      "Bash(swift build:*)"
+    ]
+  }
+}
