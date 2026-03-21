@@ -4,7 +4,8 @@
       "Bash(xcodebuild -version)",
       "Bash(sqlite3:*)",
       "Bash(swift build:*)",
-      "Bash(bash scripts/bundle.sh)"
+      "Bash(bash scripts/bundle.sh)",
+      "Bash(make dmg:*)"
     ]
   }
 }
