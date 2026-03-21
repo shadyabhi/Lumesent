@@ -40,8 +40,9 @@ hdiutil create \
     -format UDRW \
     "$DMG_TEMP"
 
-# Mount the writable DMG
-DEVICE=$(hdiutil attach -readwrite -noverify "$DMG_TEMP" | head -1 | awk '{print $1}')
+# Mount without Finder auto-opening the volume (-noautoopen). Otherwise macOS opens
+# one window on attach and our AppleScript opens another, leaving two windows.
+DEVICE=$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_TEMP" | head -1 | awk '{print $1}')
 MOUNT_DIR="/Volumes/$VOL_NAME"
 # Give Finder time to notice the volume
 sleep 2

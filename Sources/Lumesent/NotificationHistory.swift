@@ -36,12 +36,22 @@ class NotificationHistory: ObservableObject {
         )
         entries.append(entry)
 
-        // Cap at 500 entries
-        if entries.count > 500 {
-            entries = Array(entries.suffix(500))
+        // Cap so history.json stays bounded
+        let maxEntries = 1000
+        if entries.count > maxEntries {
+            entries = Array(entries.suffix(maxEntries))
         }
 
         save()
+    }
+
+    /// Most recent matched notifications (any rule), for menu previews.
+    func recentMatches(count: Int) -> [HistoryEntry] {
+        entries
+            .filter(\.matched)
+            .sorted { $0.date > $1.date }
+            .prefix(count)
+            .map { $0 }
     }
 
     /// Returns matched entries for a specific rule, most recent first.
@@ -107,7 +117,7 @@ private extension NotificationHistory {
             let data = try JSONEncoder().encode(entries)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save notification history: \(error)")
+            AppLog.shared.error("Failed to save notification history: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -115,6 +125,10 @@ private extension NotificationHistory {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data)
         else { return }
-        entries = decoded
+        let maxEntries = 1000
+        entries = decoded.count > maxEntries ? Array(decoded.suffix(maxEntries)) : decoded
+        if decoded.count > maxEntries {
+            save()
+        }
     }
 }

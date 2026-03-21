@@ -1,6 +1,33 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-// MARK: - Settings View (Tabbed)
+// MARK: - Settings sidebar / General tab scroll targets
+
+enum SettingsGeneralSection: Hashable {
+    case alerts
+    case application
+    case keyboard
+    case login
+
+    var title: String {
+        switch self {
+        case .alerts: return "Alerts"
+        case .application: return "Application"
+        case .keyboard: return "Keyboard"
+        case .login: return "Login"
+        }
+    }
+}
+
+// MARK: - Settings View (sidebar + detail, Xcode-style)
+
+private enum SettingsChromeLayout {
+    /// Matches `navigationSplitViewColumnWidth` ideal so the app name lines up with the sidebar column.
+    static let sidebarIdealWidth: CGFloat = 200
+    static let sidebarContentLeadingPadding: CGFloat = 12
+    static let detailContentHorizontalPadding: CGFloat = 24
+}
 
 struct SettingsView: View {
     @ObservedObject var ruleStore: RuleStore
@@ -8,66 +35,199 @@ struct SettingsView: View {
     @ObservedObject var history: NotificationHistory
     @ObservedObject var permissionChecker: PermissionChecker
     let onRulesChanged: ([FilterRule]) -> Void
+    let onTestRule: (FilterRule) -> Void
 
-    @State private var selectedTab: SettingsTab = .rules
+    @State private var selectedSidebarItem: SettingsSidebarItem = .rulesActive
+    @Environment(\.colorScheme) private var colorScheme
 
-    enum SettingsTab: Hashable {
-        case rules
+    enum SettingsSidebarItem: Hashable {
+        case rulesActive
         case unmatched
-        case settings
+        case general(SettingsGeneralSection)
+
+        var detailTitle: String {
+            switch self {
+            case .rulesActive: return "Active"
+            case .unmatched: return "Unmatched"
+            case .general(let section): return section.title
+            }
+        }
     }
 
-    init(ruleStore: RuleStore, appSettings: AppSettings, history: NotificationHistory, permissionChecker: PermissionChecker, onRulesChanged: @escaping ([FilterRule]) -> Void) {
+    init(
+        ruleStore: RuleStore,
+        appSettings: AppSettings,
+        history: NotificationHistory,
+        permissionChecker: PermissionChecker,
+        onRulesChanged: @escaping ([FilterRule]) -> Void,
+        onTestRule: @escaping (FilterRule) -> Void
+    ) {
         self.ruleStore = ruleStore
         self.appSettings = appSettings
         self.history = history
         self.permissionChecker = permissionChecker
         self.onRulesChanged = onRulesChanged
+        self.onTestRule = onTestRule
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Permission banner when broken — unmissable, right at the top
+            HStack(alignment: .center, spacing: 0) {
+                Text("Lumesent")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: SettingsChromeLayout.sidebarIdealWidth, alignment: .leading)
+                    .padding(.leading, SettingsChromeLayout.sidebarContentLeadingPadding)
+                HStack(alignment: .center, spacing: 12) {
+                    Text(selectedSidebarItem.detailTitle)
+                        .font(.system(size: 20, weight: .semibold))
+                    Spacer(minLength: 8)
+                    if permissionChecker.allGranted {
+                        PermissionOKIndicator(permissionChecker: permissionChecker)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, SettingsChromeLayout.detailContentHorizontalPadding)
+                .padding(.trailing, SettingsChromeLayout.detailContentHorizontalPadding)
+            }
+            .padding(.top, 0)
+            .padding(.bottom, 10)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            Divider()
+
             if !permissionChecker.allGranted {
                 PermissionBanner(permissionChecker: permissionChecker)
             }
 
-            // Tab bar
-            HStack(spacing: 0) {
-                TabButton(title: "Rules", systemImage: "list.bullet.rectangle.portrait", isSelected: selectedTab == .rules) {
-                    selectedTab = .rules
+            NavigationSplitView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SettingsSidebarGroup(title: "Rules", colorScheme: colorScheme) {
+                            settingsSidebarRow(
+                                title: "Active",
+                                systemImage: "checkmark.circle",
+                                item: .rulesActive
+                            )
+                            settingsSidebarRow(
+                                title: "Unmatched",
+                                systemImage: "bell.slash",
+                                item: .unmatched
+                            )
+                        }
+                        SettingsSidebarGroup(title: "Settings", colorScheme: colorScheme) {
+                            settingsSidebarRow(
+                                title: SettingsGeneralSection.alerts.title,
+                                systemImage: "bell.badge",
+                                item: .general(.alerts)
+                            )
+                            settingsSidebarRow(
+                                title: SettingsGeneralSection.application.title,
+                                systemImage: "app",
+                                item: .general(.application)
+                            )
+                            settingsSidebarRow(
+                                title: SettingsGeneralSection.keyboard.title,
+                                systemImage: "keyboard",
+                                item: .general(.keyboard)
+                            )
+                            settingsSidebarRow(
+                                title: SettingsGeneralSection.login.title,
+                                systemImage: "power",
+                                item: .general(.login)
+                            )
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                TabButton(title: "Unmatched", systemImage: "bell.slash", isSelected: selectedTab == .unmatched) {
-                    selectedTab = .unmatched
+                .navigationSplitViewColumnWidth(min: 176, ideal: 200, max: 260)
+                .toolbar(.hidden)
+            } detail: {
+                VStack(spacing: 0) {
+                    Group {
+                        switch selectedSidebarItem {
+                        case .rulesActive:
+                            RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
+                        case .unmatched:
+                            UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+                        case .general(let section):
+                            GeneralTab(appSettings: appSettings, scrollFocus: section)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-                Spacer()
-
-                if permissionChecker.allGranted {
-                    PermissionOKIndicator(permissionChecker: permissionChecker)
-                }
-
-                TabButton(title: "Settings", systemImage: "gearshape", isSelected: selectedTab == .settings) {
-                    selectedTab = .settings
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-
-            Divider()
-
-            // Content
-            switch selectedTab {
-            case .rules:
-                RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged)
-            case .unmatched:
-                UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
-            case .settings:
-                GeneralTab(appSettings: appSettings)
+                .background(Color(nsColor: .windowBackgroundColor))
+                .ignoresSafeArea(edges: .top)
+                .toolbar(.hidden)
             }
         }
-        .frame(minWidth: 580, minHeight: 400)
+        .frame(minWidth: 640, minHeight: 440)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func settingsSidebarRow(title: String, systemImage: String, item: SettingsSidebarItem) -> some View {
+        Button {
+            selectedSidebarItem = item
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13))
+                    .frame(width: 18, alignment: .center)
+                    .foregroundStyle(selectedSidebarItem == item ? .primary : .secondary)
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(selectedSidebarItem == item ? Color.accentColor.opacity(0.28) : Color.clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Sidebar grouped boxes (Rules / Settings)
+
+private struct SettingsSidebarGroup<Content: View>: View {
+    let title: String
+    var colorScheme: ColorScheme
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.4)
+            VStack(alignment: .leading, spacing: 2) {
+                content()
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(sidebarBoxFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08), lineWidth: 1)
+                }
+        }
+    }
+
+    private var sidebarBoxFill: Color {
+        if colorScheme == .dark {
+            return Color(white: 0.11)
+        }
+        return Color(nsColor: .controlBackgroundColor)
     }
 }
 
@@ -276,44 +436,18 @@ struct PermissionRow: View {
     }
 }
 
-// MARK: - Tab Button
-
-struct TabButton: View {
-    let title: String
-    let systemImage: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12))
-                Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-            )
-            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Rules Tab
 
 struct RulesTab: View {
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var history: NotificationHistory
     let onRulesChanged: ([FilterRule]) -> Void
+    let onTestRule: (FilterRule) -> Void
 
     @State private var editingRule: FilterRule?
     @State private var selectedLabel: String? = nil
+    @State private var importExportMessage = ""
+    @State private var showingImportExportAlert = false
 
     private var allLabels: [String] {
         let labels = Set(ruleStore.rules.compactMap { $0.label.isEmpty ? nil : $0.label })
@@ -347,6 +481,34 @@ struct RulesTab: View {
 
                 Spacer()
 
+                Button(action: exportRules) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11))
+                        Text("Export")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: importRules) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 11))
+                        Text("Import")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+
                 Button(action: addRule) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -362,8 +524,8 @@ struct RulesTab: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+            .padding(.vertical, 12)
 
             Divider()
 
@@ -377,6 +539,45 @@ struct RulesTab: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedLabel == nil {
+                List {
+                    ForEach($ruleStore.rules) { $rule in
+                        RuleCard(
+                            rule: $rule,
+                            isEditing: editingRule?.id == $rule.wrappedValue.id,
+                            history: history,
+                            allLabels: allLabels,
+                            onToggleEdit: {
+                                if editingRule?.id == $rule.wrappedValue.id {
+                                    editingRule = nil
+                                } else {
+                                    editingRule = $rule.wrappedValue
+                                }
+                            },
+                            onDelete: {
+                                let id = $rule.wrappedValue.id
+                                ruleStore.rules.removeAll { $0.id == id }
+                                save()
+                            },
+                            onSave: {
+                                editingRule = nil
+                                save()
+                            },
+                            onTestRule: {
+                                onTestRule($rule.wrappedValue)
+                            }
+                        )
+                        .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                    .onMove { indices, newOffset in
+                        ruleStore.rules.move(fromOffsets: indices, toOffset: newOffset)
+                        save()
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 1) {
@@ -397,14 +598,23 @@ struct RulesTab: View {
                                     onSave: {
                                         editingRule = nil
                                         save()
+                                    },
+                                    onTestRule: {
+                                        onTestRule(ruleStore.rules[index])
                                     }
                                 )
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                    .padding(.vertical, 12)
                 }
             }
+        }
+        .alert("Rules", isPresented: $showingImportExportAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importExportMessage)
         }
     }
 
@@ -437,6 +647,50 @@ struct RulesTab: View {
     private func save() {
         ruleStore.save()
         onRulesChanged(ruleStore.rules)
+    }
+
+    private func exportRules() {
+        do {
+            let data = try ruleStore.exportRulesJSON()
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.json]
+            panel.nameFieldStringValue = "lumesent-rules.json"
+            panel.begin { response in
+                DispatchQueue.main.async {
+                    guard response == .OK, let url = panel.url else { return }
+                    do {
+                        try data.write(to: url, options: .atomic)
+                        importExportMessage = "Rules exported successfully."
+                    } catch {
+                        importExportMessage = "Export failed: \(error.localizedDescription)"
+                    }
+                    showingImportExportAlert = true
+                }
+            }
+        } catch {
+            importExportMessage = "Export failed: \(error.localizedDescription)"
+            showingImportExportAlert = true
+        }
+    }
+
+    private func importRules() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            DispatchQueue.main.async {
+                guard response == .OK, let url = panel.url else { return }
+                do {
+                    let data = try Data(contentsOf: url)
+                    try ruleStore.importRules(from: data)
+                    onRulesChanged(ruleStore.rules)
+                    importExportMessage = "Rules imported successfully."
+                } catch {
+                    importExportMessage = "Import failed: \(error.localizedDescription)"
+                }
+                showingImportExportAlert = true
+            }
+        }
     }
 }
 
@@ -477,6 +731,7 @@ struct RuleCard: View {
     let onToggleEdit: () -> Void
     let onDelete: () -> Void
     let onSave: () -> Void
+    let onTestRule: () -> Void
 
     @State private var showingMatches = false
 
@@ -493,6 +748,10 @@ struct RuleCard: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .onChange(of: rule.isEnabled) { _, _ in onSave() }
+
+                ruleAppIcon
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -616,6 +875,13 @@ struct RuleCard: View {
                     DisplayModePicker(displayMode: $rule.displayMode)
 
                     HStack {
+                        Button("Test this rule") {
+                            onTestRule()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(!rule.isValid)
+
                         Spacer()
                         Button("Done") { onSave() }
                             .buttonStyle(.borderedProminent)
@@ -639,6 +905,23 @@ struct RuleCard: View {
         if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.displayName) \"\(rule.titleContains)\"") }
         if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.displayName) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
+    }
+
+    @ViewBuilder
+    private var ruleAppIcon: some View {
+        if rule.appIdentifier.isEmpty {
+            Image(systemName: "app.dashed")
+                .resizable()
+                .foregroundStyle(.secondary)
+        } else if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: rule.appIdentifier),
+                  let icon = NSWorkspace.shared.icon(forFile: url.path) as NSImage? {
+            Image(nsImage: icon)
+                .resizable()
+        } else {
+            Image(systemName: "app.fill")
+                .resizable()
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -727,7 +1010,8 @@ struct UnmatchedTab: View {
                         UnmatchedRow(entry: entry, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
                     }
                 }
-                .padding(12)
+                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                .padding(.vertical, 12)
             }
         }
     }
@@ -1091,86 +1375,252 @@ struct NotificationPreview: View {
     }
 }
 
+// MARK: - General tab chrome (Preferences-style sections)
+
+private struct SettingsSectionCaps: View {
+    let title: String
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            .tracking(0.55)
+            .padding(.leading, 2)
+            .padding(.bottom, 6)
+    }
+}
+
+private struct SettingsInsetGroup<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 1)
+        }
+    }
+}
+
 // MARK: - General Tab
 
 struct GeneralTab: View {
     @ObservedObject var appSettings: AppSettings
+    var scrollFocus: SettingsGeneralSection
     @State private var showingServiceStatus = false
     @State private var serviceStatusMessage = ""
 
+    /// AppKit label color: reliable on grouped controls; `.secondary` inside `Toggle` labels can render nearly invisible on macOS.
+    private var captionColor: Color { Color(nsColor: .secondaryLabelColor) }
+
+    private var layoutBinding: Binding<AlertLayout> {
+        Binding(
+            get: { appSettings.alertPresentation.layout },
+            set: {
+                appSettings.alertPresentation = AlertPresentation(
+                    layout: $0,
+                    screens: appSettings.alertPresentation.screens
+                )
+            }
+        )
+    }
+
+    private var screensBinding: Binding<AlertScreens> {
+        Binding(
+            get: { appSettings.alertPresentation.screens },
+            set: {
+                appSettings.alertPresentation = AlertPresentation(
+                    layout: appSettings.alertPresentation.layout,
+                    screens: $0
+                )
+            }
+        )
+    }
+
+    private var loginServiceToggleBinding: Binding<Bool> {
+        Binding(
+            get: { ServiceManager.isInstalled },
+            set: { newValue in
+                do {
+                    if newValue {
+                        try ServiceManager.install()
+                        serviceStatusMessage = "Lumesent will now start automatically on login and restart on crash."
+                    } else {
+                        try ServiceManager.uninstall()
+                        serviceStatusMessage = "Login service removed."
+                    }
+                } catch {
+                    serviceStatusMessage = "Error: \(error.localizedDescription)"
+                }
+                showingServiceStatus = true
+            }
+        )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(spacing: 16) {
-                // Dismiss Shortcut section
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Dismiss Shortcut", systemImage: "keyboard")
-                        .font(.system(size: 13, weight: .semibold))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsSectionCaps(title: "Alerts")
+                        SettingsInsetGroup {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Layout & screens")
+                                    .font(.system(size: 13, weight: .medium))
 
-                    Text("Set a keyboard shortcut to dismiss alerts. Clicking always works too.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                                Picker("Alert layout", selection: layoutBinding) {
+                                    ForEach(AlertLayout.allCases) { mode in
+                                        Text(mode.displayName).tag(mode)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
 
-                    HStack(spacing: 12) {
-                        KeyCaptureButton(shortcut: $appSettings.dismissKey)
+                                Picker("Screens", selection: screensBinding) {
+                                    ForEach(AlertScreens.allCases) { mode in
+                                        Text(mode.displayName).tag(mode)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.radioGroup)
+                            }
+                        }
+                    }
+                    .id(SettingsGeneralSection.alerts)
 
-                        if appSettings.dismissKey != nil {
-                            Button("Clear") {
-                                appSettings.dismissKey = nil
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsSectionCaps(title: "Application")
+                        SettingsInsetGroup {
+                            HStack(alignment: .top, spacing: 12) {
+                                Toggle("", isOn: $appSettings.showInDock)
+                                    .labelsHidden()
+                                    .toggleStyle(.checkbox)
+                                    .accessibilityLabel("Show icon in Dock")
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Show icon in Dock")
+                                        .font(.system(size: 13))
+                                    Text("Off keeps Lumesent as a menu bar–only app.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(captionColor)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .onChange(of: appSettings.showInDock) { _, _ in
                                 appSettings.save()
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
                         }
                     }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .id(SettingsGeneralSection.application)
 
-                // Login Service section
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Login Service", systemImage: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsSectionCaps(title: "Keyboard")
+                        SettingsInsetGroup {
+                            VStack(alignment: .leading, spacing: 14) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Dismiss alerts")
+                                        .font(.system(size: 13, weight: .medium))
+                                    Text("Shortcut to dismiss the full-screen alert. Clicking still works.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(captionColor)
+                                        .fixedSize(horizontal: false, vertical: true)
 
-                    Toggle(isOn: Binding(
-                        get: { ServiceManager.isInstalled },
-                        set: { newValue in
-                            do {
-                                if newValue {
-                                    try ServiceManager.install()
-                                    serviceStatusMessage = "Lumesent will now start automatically on login and restart on crash."
-                                } else {
-                                    try ServiceManager.uninstall()
-                                    serviceStatusMessage = "Login service removed."
+                                    HStack(spacing: 12) {
+                                        KeyCaptureButton(shortcut: $appSettings.dismissKey)
+
+                                        if appSettings.dismissKey != nil {
+                                            Button("Clear") {
+                                                appSettings.dismissKey = nil
+                                                appSettings.save()
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                        }
+                                    }
                                 }
-                            } catch {
-                                serviceStatusMessage = "Error: \(error.localizedDescription)"
+
+                                Divider()
+                                    .opacity(0.45)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Open this window")
+                                        .font(.system(size: 13, weight: .medium))
+                                    Text("Global shortcut from any app. Uses the same Accessibility permission as notification detection.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(captionColor)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    HStack(spacing: 12) {
+                                        KeyCaptureButton(shortcut: $appSettings.openSettingsHotkey)
+
+                                        if appSettings.openSettingsHotkey != nil {
+                                            Button("Clear") {
+                                                appSettings.openSettingsHotkey = nil
+                                                appSettings.save()
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .controlSize(.small)
+                                        }
+                                    }
+                                }
                             }
-                            showingServiceStatus = true
-                        }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Start at Login")
-                                .font(.system(size: 13))
-                            Text("Runs as a background service with crash recovery")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
                         }
                     }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
+                    .id(SettingsGeneralSection.keyboard)
 
-            Spacer()
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsSectionCaps(title: "Login")
+                        SettingsInsetGroup {
+                            HStack(alignment: .top, spacing: 12) {
+                                Toggle("", isOn: loginServiceToggleBinding)
+                                    .labelsHidden()
+                                    .toggleStyle(.checkbox)
+                                    .accessibilityLabel("Start at Login")
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Start at Login")
+                                        .font(.system(size: 13))
+                                    Text("Runs as a background service with crash recovery.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(captionColor)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .id(SettingsGeneralSection.login)
+                }
+                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                .padding(.top, 20)
+                .padding(.bottom, SettingsChromeLayout.detailContentHorizontalPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .onChange(of: scrollFocus) { _, newSection in
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    proxy.scrollTo(newSection, anchor: .top)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.async {
+                    proxy.scrollTo(scrollFocus, anchor: .top)
+                }
+            }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: appSettings.dismissKey) { _, _ in
+            appSettings.save()
+        }
+        .onChange(of: appSettings.openSettingsHotkey) { _, _ in
+            appSettings.save()
+        }
+        .onChange(of: appSettings.alertPresentation) { _, _ in
             appSettings.save()
         }
         .alert("Login Service", isPresented: $showingServiceStatus) {

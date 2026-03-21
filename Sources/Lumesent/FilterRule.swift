@@ -72,4 +72,12 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var isValid: Bool {
         !appIdentifier.isEmpty || !titleContains.isEmpty || !bodyContains.isEmpty
     }
+
+    /// Sample notification for “Test this rule” previews.
+    func previewNotificationRecord() -> NotificationRecord {
+        let app = appIdentifier.isEmpty ? "com.apple.Terminal" : appIdentifier
+        let t = titleContains.isEmpty ? "Preview: matched title" : titleContains
+        let b = bodyContains.isEmpty ? "This is sample body text for your rule preview." : bodyContains
+        return NotificationRecord(id: -42, appIdentifier: app, title: t, body: b, deliveredDate: Date())
+    }
 }

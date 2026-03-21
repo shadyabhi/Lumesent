@@ -14,7 +14,7 @@ swift run                   # Run from source (dev, no .app bundle)
 
 The .app bundle (`make build` / `make run`) is required for stable permission grants and the optional launchd login service.
 
-No tests, no linter, no third-party dependencies. Links against system `sqlite3`.
+No tests, no linter. **Sparkle** is the only third-party dependency (SPM); `scripts/bundle.sh` copies `Sparkle.framework` into the `.app`. Links against system `sqlite3`. Logging uses `os.Logger` via `AppLog`.
 
 ## Architecture
 

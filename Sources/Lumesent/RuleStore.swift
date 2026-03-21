@@ -18,8 +18,18 @@ class RuleStore: ObservableObject {
             let data = try JSONEncoder().encode(rules)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save rules: \(error)")
+            AppLog.shared.error("Failed to save rules: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func exportRulesJSON() throws -> Data {
+        try JSONEncoder().encode(rules)
+    }
+
+    func importRules(from data: Data) throws {
+        let imported = try JSONDecoder().decode([FilterRule].self, from: data)
+        rules = imported
+        save()
     }
 
     private func load() {

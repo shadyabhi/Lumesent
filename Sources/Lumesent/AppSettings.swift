@@ -14,13 +14,11 @@ struct DismissKeyShortcut: Codable, Equatable {
     }
 
     func matches(keyCode: UInt16, modifierFlags: UInt) -> Bool {
-        // Mask to only care about Shift, Control, Option, Command
-        let mask: UInt = 0x00F_E0000  // deviceIndependentFlagsMask-ish
+        let mask: UInt = 0x00F_E0000
         return self.keyCode == keyCode && (self.modifierFlags & mask) == (modifierFlags & mask)
     }
 }
 
-/// Lightweight shim so DismissKeyShortcut doesn't depend on AppKit directly
 struct NSEventShim {
     let keyCode: UInt16
     let modifierRawValue: UInt
@@ -29,6 +27,11 @@ struct NSEventShim {
 
 class AppSettings: ObservableObject {
     @Published var dismissKey: DismissKeyShortcut?
+    @Published var showInDock: Bool = false
+    @Published var openSettingsHotkey: DismissKeyShortcut?
+    @Published var alertPresentation: AlertPresentation = .default
+    /// When non-nil and in the future, matched alerts are suppressed.
+    @Published var pauseAlertsUntil: Date?
 
     private let fileURL: URL
 
@@ -40,12 +43,23 @@ class AppSettings: ObservableObject {
         load()
     }
 
+    var isPauseActive: Bool {
+        guard let until = pauseAlertsUntil else { return false }
+        return Date() < until
+    }
+
     func save() {
         do {
-            let data = try JSONEncoder().encode(SettingsData(dismissKey: dismissKey))
+            let data = try JSONEncoder().encode(SettingsData(
+                dismissKey: dismissKey,
+                showInDock: showInDock,
+                openSettingsHotkey: openSettingsHotkey,
+                alertPresentation: alertPresentation,
+                pauseAlertsUntil: pauseAlertsUntil
+            ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save settings: \(error)")
+            AppLog.shared.error("Failed to save settings: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -54,9 +68,17 @@ class AppSettings: ObservableObject {
               let decoded = try? JSONDecoder().decode(SettingsData.self, from: data)
         else { return }
         dismissKey = decoded.dismissKey
+        showInDock = decoded.showInDock
+        openSettingsHotkey = decoded.openSettingsHotkey
+        alertPresentation = decoded.alertPresentation
+        pauseAlertsUntil = decoded.pauseAlertsUntil
     }
 
     private struct SettingsData: Codable {
         var dismissKey: DismissKeyShortcut?
+        var showInDock: Bool = false
+        var openSettingsHotkey: DismissKeyShortcut?
+        var alertPresentation: AlertPresentation = .default
+        var pauseAlertsUntil: Date?
     }
 }

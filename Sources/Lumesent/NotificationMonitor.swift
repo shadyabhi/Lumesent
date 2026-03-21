@@ -1,47 +1,83 @@
 import AppKit
+import Combine
 import SQLite3
 
-final class NotificationMonitor {
+enum NotificationDatabaseStatus: Equatable {
+    /// Cannot read the DB path (typically missing Full Disk Access).
+    case noAccess
+    /// Path is readable but SQLite could not open (locked, corrupt, etc.).
+    case temporarilyUnavailable
+    case connected
+}
+
+final class NotificationMonitor: ObservableObject {
+    @Published private(set) var databaseStatus: NotificationDatabaseStatus = .noAccess
+
+    /// `AXIsProcessTrustedWithOptions(prompt: true)` may show a system dialog; only once per launch.
+    private static var didPromptForAccessibilityThisSession = false
+
     private let onNewNotification: (NotificationRecord) -> Void
     private var db: OpaquePointer?
     private var lastSeenRecId: Int64 = 0
+    private var didPrimeLastSeenId = false
     private var fallbackTimer: Timer?
     private var axObserver: AXObserver?
+
+    private var dbPath: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
+    }
 
     init(onNewNotification: @escaping (NotificationRecord) -> Void) {
         self.onNewNotification = onNewNotification
     }
 
     func start() {
-        guard openDatabase() else {
-            showPermissionAlert()
-            return
+        tryOpenDatabase()
+        if db != nil {
+            initializeLastSeenIdIfNeeded()
         }
-        initializeLastSeenId()
         startAccessibilityObserver()
         startFallbackTimer()
     }
 
     // MARK: - SQLite
 
-    private func openDatabase() -> Bool {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let dbPath = "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
+    private func tryOpenDatabase() {
+        if db != nil { return }
 
-        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
-        let result = sqlite3_open_v2(dbPath, &db, flags, nil)
-
-        guard result == SQLITE_OK else {
-            NSLog("Lumesent: Failed to open notification DB: %d", result)
-            return false
+        guard FileManager.default.isReadableFile(atPath: dbPath) else {
+            DispatchQueue.main.async { self.databaseStatus = .noAccess }
+            return
         }
 
-        // Use WAL mode for non-blocking reads
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
+        var handle: OpaquePointer?
+        let result = sqlite3_open_v2(dbPath, &handle, flags, nil)
+
+        guard result == SQLITE_OK, let handle else {
+            if let handle { sqlite3_close(handle) }
+            AppLog.shared.notice("Failed to open notification DB: code \(result, privacy: .public)")
+            DispatchQueue.main.async { self.databaseStatus = .temporarilyUnavailable }
+            return
+        }
+
+        db = handle
         sqlite3_exec(db, "PRAGMA journal_mode=wal", nil, nil, nil)
-        return true
+        DispatchQueue.main.async { self.databaseStatus = .connected }
+        AppLog.shared.info("Notification DB opened")
     }
 
-    private func initializeLastSeenId() {
+    private func closeDatabase() {
+        if let db {
+            sqlite3_close(db)
+            self.db = nil
+        }
+        didPrimeLastSeenId = false
+    }
+
+    private func initializeLastSeenIdIfNeeded() {
+        guard let db, !didPrimeLastSeenId else { return }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
 
@@ -50,10 +86,13 @@ final class NotificationMonitor {
         else { return }
 
         lastSeenRecId = sqlite3_column_int64(stmt, 0)
-        NSLog("Lumesent: initialized, last rec_id = %lld", lastSeenRecId)
+        didPrimeLastSeenId = true
+        AppLog.shared.info("initialized, last rec_id = \(self.lastSeenRecId, privacy: .public)")
     }
 
     func fetchNewNotifications() {
+        guard let db else { return }
+
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
 
@@ -66,7 +105,10 @@ final class NotificationMonitor {
             """
 
         guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else {
-            NSLog("Lumesent: Failed to prepare query: %@", String(cString: sqlite3_errmsg(db!)))
+            let msg = String(cString: sqlite3_errmsg(db))
+            AppLog.shared.notice("Failed to prepare query: \(msg, privacy: .public)")
+            DispatchQueue.main.async { self.databaseStatus = .temporarilyUnavailable }
+            closeDatabase()
             return
         }
 
@@ -94,7 +136,6 @@ final class NotificationMonitor {
             let deliveredDate: Date
             let timestamp = sqlite3_column_double(stmt, 3)
             if timestamp > 0 {
-                // Core Data timestamp (seconds since 2001-01-01)
                 deliveredDate = Date(timeIntervalSinceReferenceDate: timestamp)
             } else {
                 deliveredDate = Date()
@@ -109,7 +150,7 @@ final class NotificationMonitor {
             )
 
             lastSeenRecId = recId
-            NSLog("Lumesent: new notification from %@: %@ — %@", appIdentifier, title, body)
+            AppLog.shared.debug("new notification from \(appIdentifier, privacy: .public): \(title, privacy: .public)")
             onNewNotification(record)
         }
     }
@@ -135,7 +176,7 @@ final class NotificationMonitor {
         }
 
         guard let ncPid = findNotificationCenterPID() else {
-            NSLog("Lumesent: could not find NotificationCenter process")
+            AppLog.shared.notice("could not find NotificationCenter process")
             return
         }
 
@@ -143,7 +184,7 @@ final class NotificationMonitor {
         var observer: AXObserver?
 
         let callback: AXObserverCallback = { _, _, _, refcon in
-            guard let refcon = refcon else { return }
+            guard let refcon else { return }
             let monitor = Unmanaged<NotificationMonitor>.fromOpaque(refcon).takeUnretainedValue()
             DispatchQueue.main.async {
                 monitor.fetchNewNotifications()
@@ -151,9 +192,9 @@ final class NotificationMonitor {
         }
 
         guard AXObserverCreate(ncPid, callback, &observer) == .success,
-              let observer = observer
+              let observer
         else {
-            NSLog("Lumesent: failed to create AXObserver")
+            AppLog.shared.notice("failed to create AXObserver")
             return
         }
 
@@ -164,7 +205,7 @@ final class NotificationMonitor {
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         self.axObserver = observer
 
-        NSLog("Lumesent: accessibility observer started for NotificationCenter (pid %d)", ncPid)
+        AppLog.shared.info("accessibility observer started for NotificationCenter (pid \(ncPid, privacy: .public))")
     }
 
     private func findNotificationCenterPID() -> pid_t? {
@@ -173,8 +214,10 @@ final class NotificationMonitor {
     }
 
     private func promptForAccessibility() {
-        NSLog("Lumesent: accessibility not granted, requesting...")
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+        guard !Self.didPromptForAccessibilityThisSession else { return }
+        Self.didPromptForAccessibilityThisSession = true
+        AppLog.shared.info("accessibility not granted, requesting...")
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
     }
 
@@ -182,31 +225,17 @@ final class NotificationMonitor {
 
     private func startFallbackTimer() {
         fallbackTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            // Retry accessibility observer if not yet set up
+            guard let self else { return }
             if self.axObserver == nil && AXIsProcessTrusted() {
                 self.startAccessibilityObserver()
             }
-            self.fetchNewNotifications()
-        }
-    }
-
-    // MARK: - Permission Alert
-
-    private func showPermissionAlert() {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "Full Disk Access Required"
-            alert.informativeText = "Lumesent needs Full Disk Access to read system notifications. Please grant it in System Settings > Privacy & Security > Full Disk Access."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Quit")
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+            if self.db == nil {
+                self.tryOpenDatabase()
+                if self.db != nil {
+                    self.initializeLastSeenIdIfNeeded()
+                }
             }
-            NSApp.terminate(nil)
+            self.fetchNewNotifications()
         }
     }
 }

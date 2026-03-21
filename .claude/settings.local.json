@@ -6,7 +6,11 @@
       "Bash(swift build:*)",
       "Bash(bash scripts/bundle.sh)",
       "Bash(make dmg:*)",
-      "Bash(make build:*)"
+      "Bash(make build:*)",
+      "Bash(grep:*)",
+      "Bash(security find-identity:*)",
+      "Bash(security verify-cert:*)",
+      "Bash(security find-certificate:*)"
     ]
   }
 }
