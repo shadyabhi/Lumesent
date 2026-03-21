@@ -10,7 +10,10 @@
       "Bash(grep:*)",
       "Bash(security find-identity:*)",
       "Bash(security verify-cert:*)",
-      "Bash(security find-certificate:*)"
+      "Bash(security find-certificate:*)",
+      "Bash(Lumesent.app/Contents/MacOS/Lumesent --send --title \"Alert\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(wc -l /Users/shadyabhi/coder/lumesent/Sources/Lumesent/*.swift)"
     ]
   }
 }

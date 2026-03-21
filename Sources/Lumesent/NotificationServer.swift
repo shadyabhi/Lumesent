@@ -1,6 +1,6 @@
 import Foundation
 
-struct ExternalNotification: Decodable {
+struct ExternalNotification: Codable {
     let title: String
     var body: String?
     var appName: String?
