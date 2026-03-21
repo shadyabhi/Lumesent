@@ -33,6 +33,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         monitor.start()
 
+        // Listen for open-settings signal from duplicate instances
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(openSettings),
+            name: .init("com.shadyabhi.Lumesent.openSettings"),
+            object: nil)
+
         // Auto-open settings if permissions are missing on first launch
         if !permissionChecker.allGranted {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in

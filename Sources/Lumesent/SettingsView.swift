@@ -1054,6 +1054,8 @@ struct NotificationPreview: View {
 struct GeneralTab: View {
     @ObservedObject var appSettings: AppSettings
     @Environment(\.dismiss) private var dismiss
+    @State private var showingServiceStatus = false
+    @State private var serviceStatusMessage = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1091,12 +1093,49 @@ struct GeneralTab: View {
                 }
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Login Service")
+                    .font(.system(size: 14, weight: .semibold))
+
+                Toggle(isOn: Binding(
+                    get: { ServiceManager.isInstalled },
+                    set: { newValue in
+                        do {
+                            if newValue {
+                                try ServiceManager.install()
+                                serviceStatusMessage = "Lumesent will now start automatically on login and restart on crash."
+                            } else {
+                                try ServiceManager.uninstall()
+                                serviceStatusMessage = "Login service removed."
+                            }
+                        } catch {
+                            serviceStatusMessage = "Error: \(error.localizedDescription)"
+                        }
+                        showingServiceStatus = true
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Start at Login")
+                        Text("Runs as a background service with crash recovery")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Spacer()
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: appSettings.dismissKey) { _, _ in
             appSettings.save()
+        }
+        .alert("Login Service", isPresented: $showingServiceStatus) {
+            Button("OK") {}
+        } message: {
+            Text(serviceStatusMessage)
         }
     }
 }
