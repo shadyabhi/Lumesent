@@ -5,13 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-swift build                                          # Build (debug)
-swift run                                            # Run from source (dev)
-swift build -c release && bash scripts/bundle.sh     # Build .app bundle
-open Lumesent.app                                    # Run .app bundle
+make build                  # Release build + bundle .app
+make run                    # Build, kill any running instance, and open .app
+make clean                  # Remove .build/ and Lumesent.app/
+swift build                 # Quick debug build (no .app bundle)
+swift run                   # Run from source (dev, no .app bundle)
 ```
 
-The .app bundle is required for stable permission grants and the optional launchd login service.
+The .app bundle (`make build` / `make run`) is required for stable permission grants and the optional launchd login service.
 
 No tests, no linter, no third-party dependencies. Links against system `sqlite3`.
 

@@ -11,14 +11,17 @@ final class PermissionChecker: ObservableObject {
 
     init() {
         check()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.check()
         }
     }
 
     func check() {
         let fda = checkFullDiskAccess()
-        let ax = AXIsProcessTrusted()
+        // Use AXIsProcessTrustedWithOptions to force a fresh TCC database query
+        // rather than AXIsProcessTrusted() which can return a cached result.
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): false] as CFDictionary
+        let ax = AXIsProcessTrustedWithOptions(opts)
         DispatchQueue.main.async {
             self.hasFullDiskAccess = fda
             self.hasAccessibility = ax

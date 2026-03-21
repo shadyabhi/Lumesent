@@ -160,7 +160,8 @@ struct PermissionBanner: View {
                 if !permissionChecker.hasFullDiskAccess {
                     PermissionRow(
                         title: "Full Disk Access",
-                        description: "Required to read the notification database.",
+                        description: "Lumesent reads macOS's notification database stored at ~/Library/Group Containers/group.com.apple.usernoted/db2/db to detect notifications from other apps. This folder is protected by macOS, and Full Disk Access is the narrowest permission Apple offers to read it. Lumesent only reads this single database file — it does not access any other files on your disk.",
+                        learnMoreURL: "https://support.apple.com/guide/mac-help/control-access-to-files-and-folders-on-mac-mchld5a35146/mac",
                         action: {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
                         }
@@ -170,7 +171,8 @@ struct PermissionBanner: View {
                 if !permissionChecker.hasAccessibility {
                     PermissionRow(
                         title: "Accessibility",
-                        description: "Required for real-time notification detection.",
+                        description: "Lumesent uses the macOS Accessibility API (AXObserver) to watch the Notification Center UI for real-time notification detection. This lets it respond instantly when a notification appears, instead of relying only on periodic polling.",
+                        learnMoreURL: "https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac",
                         action: {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
                         }
@@ -182,6 +184,21 @@ struct PermissionBanner: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
+
+            HStack(spacing: 4) {
+                Text("Lumesent is open source — verify its behavior anytime:")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.7))
+                Button(action: {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shadyabhi/lumesent")!)
+                }) {
+                    Text("View Source on GitHub")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
@@ -199,33 +216,66 @@ struct PermissionBanner: View {
 struct PermissionRow: View {
     let title: String
     let description: String
+    var learnMoreURL: String? = nil
     let action: () -> Void
 
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.9))
+    @State private var isExpanded = false
 
-            VStack(alignment: .leading, spacing: 1) {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.9))
+
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+
+                Spacer()
+
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
+                    Text(isExpanded ? "Less" : "Why?")
+                        .font(.system(size: 10, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: action) {
+                    Text("Open Settings")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.white.opacity(0.25))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isExpanded {
                 Text(description)
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.85))
-            }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 24)
 
-            Spacer()
-
-            Button(action: action) {
-                Text("Open Settings")
-                    .font(.system(size: 11, weight: .semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.white.opacity(0.25))
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                if let urlString = learnMoreURL, let url = URL(string: urlString) {
+                    Button(action: { NSWorkspace.shared.open(url) }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 10))
+                            Text("Apple Support: Learn more")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.white)
+                        .underline()
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 24)
+                }
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
