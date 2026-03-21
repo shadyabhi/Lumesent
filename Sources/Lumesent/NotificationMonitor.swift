@@ -31,6 +31,7 @@ final class NotificationMonitor: ObservableObject {
     }
 
     func start() {
+        AppLog.shared.info("NotificationMonitor starting — dbPath=\(self.dbPath, privacy: .public)")
         tryOpenDatabase()
         if db != nil {
             initializeLastSeenIdIfNeeded()
@@ -157,6 +158,7 @@ final class NotificationMonitor: ObservableObject {
         guard let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let req = plist["req"] as? [String: Any]
         else {
+            AppLog.shared.debug("parsePlist failed — could not decode plist blob (\(data.count, privacy: .public) bytes)")
             return ("", "")
         }
 
@@ -222,12 +224,15 @@ final class NotificationMonitor: ObservableObject {
     // MARK: - Fallback Timer
 
     private func startFallbackTimer() {
+        AppLog.shared.info("fallback poll timer started (5s interval)")
         fallbackTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             guard let self else { return }
             if self.axObserver == nil && AXIsProcessTrusted() {
+                AppLog.shared.info("fallback timer: AX now trusted, retrying observer setup")
                 self.startAccessibilityObserver()
             }
             if self.db == nil {
+                AppLog.shared.debug("fallback timer: DB not open, attempting reconnect")
                 self.tryOpenDatabase()
                 if self.db != nil {
                     self.initializeLastSeenIdIfNeeded()

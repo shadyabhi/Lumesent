@@ -48,8 +48,9 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var isEnabled: Bool
     var label: String  // empty = no label
     var displayMode: AlertDisplayMode
+    var focusSourceOnDismiss: Bool
 
-    init(id: UUID = UUID(), appIdentifier: String = "", titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", displayMode: AlertDisplayMode = .defaultTimed) {
+    init(id: UUID = UUID(), appIdentifier: String = "", titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.titleContains = titleContains
@@ -59,6 +60,21 @@ struct FilterRule: Identifiable, Codable, Equatable {
         self.isEnabled = isEnabled
         self.label = label
         self.displayMode = displayMode
+        self.focusSourceOnDismiss = focusSourceOnDismiss
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        appIdentifier = try c.decode(String.self, forKey: .appIdentifier)
+        titleContains = try c.decode(String.self, forKey: .titleContains)
+        titleOperator = try c.decode(MatchOperator.self, forKey: .titleOperator)
+        bodyContains = try c.decode(String.self, forKey: .bodyContains)
+        bodyOperator = try c.decode(MatchOperator.self, forKey: .bodyOperator)
+        isEnabled = try c.decode(Bool.self, forKey: .isEnabled)
+        label = try c.decode(String.self, forKey: .label)
+        displayMode = try c.decode(AlertDisplayMode.self, forKey: .displayMode)
+        focusSourceOnDismiss = try c.decodeIfPresent(Bool.self, forKey: .focusSourceOnDismiss) ?? true
     }
 
     var isValid: Bool {

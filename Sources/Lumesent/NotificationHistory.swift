@@ -114,11 +114,18 @@ private extension NotificationHistory {
     }
 
     func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data)
-        else { return }
+        guard let data = try? Data(contentsOf: fileURL) else {
+            AppLog.shared.info("no history file at \(self.fileURL.path, privacy: .public), starting empty")
+            return
+        }
+        guard let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
+            AppLog.shared.error("failed to decode history from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
+            return
+        }
         entries = decoded.count > Self.maxEntries ? Array(decoded.suffix(Self.maxEntries)) : decoded
+        AppLog.shared.info("loaded \(self.entries.count, privacy: .public) history entries (\(self.entries.filter(\.matched).count, privacy: .public) matched)")
         if decoded.count > Self.maxEntries {
+            AppLog.shared.info("history trimmed from \(decoded.count, privacy: .public) to \(Self.maxEntries, privacy: .public)")
             save()
         }
     }

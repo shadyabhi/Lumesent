@@ -14,8 +14,10 @@ struct ServiceManager {
 
     static func install() throws {
         guard let appPath = appBundlePath else {
+            AppLog.shared.error("ServiceManager.install failed — not running from .app bundle")
             throw ServiceError.notRunningFromBundle
         }
+        AppLog.shared.info("ServiceManager.install — appPath=\(appPath, privacy: .public)")
 
         let plist: [String: Any] = [
             "Label": label,
@@ -43,7 +45,11 @@ struct ServiceManager {
     }
 
     static func uninstall() throws {
-        guard isInstalled else { return }
+        guard isInstalled else {
+            AppLog.shared.info("ServiceManager.uninstall — not installed, nothing to do")
+            return
+        }
+        AppLog.shared.info("ServiceManager.uninstall — removing \(agentPlistURL.path, privacy: .public)")
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")

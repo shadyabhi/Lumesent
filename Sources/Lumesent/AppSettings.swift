@@ -61,14 +61,20 @@ class AppSettings: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode(SettingsData.self, from: data)
-        else { return }
+        guard let data = try? Data(contentsOf: fileURL) else {
+            AppLog.shared.info("no settings file at \(self.fileURL.path, privacy: .public), using defaults")
+            return
+        }
+        guard let decoded = try? JSONDecoder().decode(SettingsData.self, from: data) else {
+            AppLog.shared.error("failed to decode settings from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
+            return
+        }
         dismissKey = decoded.dismissKey
         showInDock = decoded.showInDock
         openSettingsHotkey = decoded.openSettingsHotkey
         alertPresentation = decoded.alertPresentation
         pauseAlertsUntil = decoded.pauseAlertsUntil
+        AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
     private struct SettingsData: Codable {

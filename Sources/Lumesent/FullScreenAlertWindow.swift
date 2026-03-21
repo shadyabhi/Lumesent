@@ -1,4 +1,5 @@
 import AppKit
+import os
 import QuartzCore
 import SwiftUI
 
@@ -12,20 +13,29 @@ final class FullScreenAlertWindow {
     private static var managed: [Managed] = []
     private static var dismissTimer: Timer?
     private static var keyMonitor: Any?
+    private static var currentSourceContext: SourceContext?
+    private static var shouldFocusSourceOnDismiss: Bool = true
 
     static func show(
         notification: NotificationRecord,
         displayMode: AlertDisplayMode = .defaultTimed,
         dismissKey: DismissKeyShortcut? = nil,
-        presentation: AlertPresentation = .default
+        presentation: AlertPresentation = .default,
+        focusSourceOnDismiss: Bool = true
     ) {
         dismiss()
 
         let screens = screens(for: presentation.screens)
-        guard !screens.isEmpty else { return }
+        guard !screens.isEmpty else {
+            AppLog.shared.notice("alert show skipped — no screens available for mode=\(String(describing: presentation.screens), privacy: .public)")
+            return
+        }
 
+        AppLog.shared.info("showing alert: title=\(notification.title, privacy: .public) layout=\(String(describing: presentation.layout), privacy: .public) screens=\(screens.count, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public)")
         NSSound.beep()
 
+        shouldFocusSourceOnDismiss = focusSourceOnDismiss
+        currentSourceContext = notification.sourceContext
         let layout = presentation.layout
         for screen in screens {
             let window = NSWindow(
@@ -116,7 +126,47 @@ final class FullScreenAlertWindow {
         }
     }
 
+    private static let log = Logger(subsystem: "com.shadyabhi.Lumesent", category: "FocusSource")
+
+    /// Activate the terminal window/pane that sent the notification.
+    static func focusSource(_ ctx: SourceContext) {
+        log.notice("focusSource: tmux=\(ctx.tmuxSession ?? "nil", privacy: .public):\(ctx.tmuxWindow ?? "nil", privacy: .public):\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
+
+        // Run tmux + app activation off the main thread to avoid blocking UI
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 1) Switch tmux to the source pane
+            if ctx.hasTmux, let session = ctx.tmuxSession, let window = ctx.tmuxWindow, let pane = ctx.tmuxPane {
+                let cmd = "tmux select-window -t \(session):\(window) && tmux select-pane -t \(pane)"
+                log.notice("focusSource: running: \(cmd, privacy: .public)")
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+                proc.arguments = ["-c", cmd]
+                proc.standardOutput = FileHandle.nullDevice
+                proc.standardError = FileHandle.nullDevice
+                do {
+                    try proc.run()
+                    proc.waitUntilExit()
+                    log.notice("focusSource: tmux exit code=\(proc.terminationStatus, privacy: .public)")
+                } catch {
+                    log.notice("focusSource error: tmux failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+
+            // 2) Bring the terminal app to the foreground (must be on main thread)
+            if let bundleId = ctx.terminalAppBundleId,
+               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+                DispatchQueue.main.async {
+                    log.notice("focusSource: activating \(bundleId, privacy: .public)")
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+                }
+            }
+        }
+    }
+
     static func dismiss() {
+        AppLog.shared.debug("alert dismiss called, \(managed.count, privacy: .public) windows open")
         dismissTimer?.invalidate()
         dismissTimer = nil
         if let monitor = keyMonitor {
@@ -126,6 +176,10 @@ final class FullScreenAlertWindow {
 
         let copies = managed
         managed.removeAll()
+
+        // Grab and clear source context before closing windows
+        let sourceCtx = currentSourceContext
+        currentSourceContext = nil
 
         for m in copies {
             if m.layout == .banner {
@@ -142,5 +196,11 @@ final class FullScreenAlertWindow {
                 m.window.orderOut(nil)
             }
         }
+
+        // Focus source after windows are dismissed
+        if shouldFocusSourceOnDismiss, let ctx = sourceCtx {
+            focusSource(ctx)
+        }
+        shouldFocusSourceOnDismiss = true
     }
 }

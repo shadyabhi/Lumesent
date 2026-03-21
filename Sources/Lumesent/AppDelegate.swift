@@ -1,12 +1,13 @@
 import AppKit
 import Combine
 import SwiftUI
+import UserNotifications
 private class HistoryEntryBox: NSObject {
     let entry: HistoryEntry
     init(_ entry: HistoryEntry) { self.entry = entry }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem!
     private var monitor: NotificationMonitor!
     private var filterEngine: FilterEngine!
@@ -24,13 +25,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var dedupKey: String?
     private var dedupTime: Date?
+    /// Maps native notification request IDs → source contexts for focus-on-click.
+    private var nativeNotificationContexts: [String: SourceContext] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLog.shared.info("app launching, pid=\(ProcessInfo.processInfo.processIdentifier, privacy: .public)")
         ruleStore = RuleStore()
         appSettings = AppSettings()
         notificationHistory = NotificationHistory()
         filterEngine = FilterEngine(rules: ruleStore.rules)
         permissionChecker = PermissionChecker()
+        AppLog.shared.info("loaded \(self.ruleStore.rules.count, privacy: .public) rules (\(self.ruleStore.rules.filter(\.isEnabled).count, privacy: .public) enabled), \(self.notificationHistory.entries.count, privacy: .public) history entries")
 
         permissionObservation = permissionChecker.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateMenuBarIcon() }
@@ -88,6 +93,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         registerGlobalSettingsHotkey()
         updateMenuBarIcon()
+
+        AppLog.shared.info("app startup complete — FDA=\(self.permissionChecker.hasFullDiskAccess, privacy: .public) AX=\(self.permissionChecker.hasAccessibility, privacy: .public) paused=\(self.appSettings.isPauseActive, privacy: .public)")
+
+        // Request notification permission early so the system prompt appears
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            AppLog.shared.info("notification authorization: granted=\(granted, privacy: .public) error=\(error?.localizedDescription ?? "none", privacy: .public)")
+        }
 
         DistributedNotificationCenter.default().addObserver(
             self,
@@ -352,12 +365,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode) {
+    private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true) {
         FullScreenAlertWindow.show(
             notification: record,
             displayMode: displayMode,
             dismissKey: appSettings.dismissKey,
-            presentation: appSettings.alertPresentation
+            presentation: appSettings.alertPresentation,
+            focusSourceOnDismiss: focusSourceOnDismiss
         )
         flashMenuBarIcon()
     }
@@ -375,22 +389,52 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func handleExternalNotification(_ ext: ExternalNotification) {
         let record = NotificationRecord.fromExternal(ext)
-        AppLog.shared.info("external notification: \(record.title, privacy: .public)")
+        AppLog.shared.info("external notification: title=\(record.title, privacy: .public) app=\(record.appName, privacy: .public) alertType=\(ext.alertType ?? "fullscreen", privacy: .public) displayMode=\(String(describing: ext.displayMode), privacy: .public)")
         notificationHistory.record(record, matched: true, matchedRuleId: nil)
-        guard !appSettings.isPauseActive else { return }
-        presentAlert(for: record, displayMode: ext.resolvedDisplayMode)
+        guard !appSettings.isPauseActive else {
+            AppLog.shared.debug("skipped external alert (paused)")
+            return
+        }
+        let focus = ext.resolvedFocusSource
+        switch ext.resolvedAlertType {
+        case .notification:
+            postNativeNotification(record, focusSourceOnDismiss: focus)
+        case .fullscreen:
+            presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focus)
+        }
+    }
+
+    private func postNativeNotification(_ record: NotificationRecord, focusSourceOnDismiss: Bool = true) {
+        let content = UNMutableNotificationContent()
+        content.title = record.title
+        if !record.body.isEmpty {
+            content.body = record.body
+        }
+        content.sound = .default
+        let requestId = UUID().uuidString
+        if focusSourceOnDismiss, let ctx = record.sourceContext {
+            nativeNotificationContexts[requestId] = ctx
+        }
+        let request = UNNotificationRequest(identifier: requestId, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                AppLog.shared.error("failed to post native notification: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     private func handleNewNotification(_ record: NotificationRecord) {
+        AppLog.shared.debug("handleNewNotification: app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public) body=\(record.body.prefix(80), privacy: .public)")
         let matchedRule = filterEngine.matchingRule(for: record)
         notificationHistory.record(record, matched: matchedRule != nil, matchedRuleId: matchedRule?.id)
 
         guard let rule = matchedRule else {
-            AppLog.shared.debug("notification did not match: \(record.title, privacy: .public)")
+            AppLog.shared.debug("no rule matched for: app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
             return
         }
+        AppLog.shared.info("rule matched: ruleId=\(rule.id.uuidString, privacy: .public) label=\(rule.label, privacy: .public) for app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
         guard !appSettings.isPauseActive else {
-            AppLog.shared.debug("skipped alert (paused): \(record.title, privacy: .public)")
+            AppLog.shared.debug("skipped alert (paused until \(String(describing: self.appSettings.pauseAlertsUntil), privacy: .public)): \(record.title, privacy: .public)")
             return
         }
         if shouldSuppressDuplicate(record) {
@@ -398,8 +442,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        AppLog.shared.info("MATCH — showing alert: \(record.title, privacy: .public)")
-        presentAlert(for: record, displayMode: rule.displayMode)
+        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: rule.displayMode), privacy: .public) focusSource=\(rule.focusSourceOnDismiss, privacy: .public)")
+        presentAlert(for: record, displayMode: rule.displayMode, focusSourceOnDismiss: rule.focusSourceOnDismiss)
     }
 
     @objc private func replayHistoryEntry(_ sender: NSMenuItem) {
@@ -469,5 +513,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    /// Show native notifications even when the app is in the foreground.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+
+    /// Focus the source terminal when the user clicks a native notification.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let requestId = response.notification.request.identifier
+        if let ctx = nativeNotificationContexts.removeValue(forKey: requestId) {
+            FullScreenAlertWindow.focusSource(ctx)
+        }
+        completionHandler()
     }
 }

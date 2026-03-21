@@ -14,7 +14,7 @@ struct OnboardingView: View {
         ),
         (
             "Grant permissions",
-            "Full Disk Access lets Lumesent read Apple’s notification database. Accessibility lets it react instantly when Notification Center updates. Both are required for reliable matching.",
+            "Full Disk Access lets Lumesent read Apple’s notification database. Accessibility lets it react instantly when Notification Center updates. Both are required. Notification permission is optional — it enables native macOS notifications via the CLI.",
             "lock.shield.fill"
         ),
         (

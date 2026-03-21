@@ -13,7 +13,15 @@
       "Bash(security find-certificate:*)",
       "Bash(Lumesent.app/Contents/MacOS/Lumesent --send --title \"Alert\")",
       "Bash(echo \"exit: $?\")",
-      "Bash(wc -l /Users/shadyabhi/coder/lumesent/Sources/Lumesent/*.swift)"
+      "Bash(wc -l /Users/shadyabhi/coder/lumesent/Sources/Lumesent/*.swift)",
+      "Bash(echo:*)",
+      "Bash(env)",
+      "Bash(./Lumesent.app/Contents/MacOS/Lumesent --send --title \"Test focus\")",
+      "Bash(/usr/bin/log show:*)",
+      "Bash(log show:*)",
+      "Bash(./Lumesent.app/Contents/MacOS/Lumesent --help)",
+      "Bash(./Lumesent.app/Contents/MacOS/Lumesent --send --title \"Native test\" --body \"This is a native notification\" --alert-type notification)",
+      "Bash(./Lumesent.app/Contents/MacOS/Lumesent --send --title \"Fullscreen test\" --body \"This is fullscreen \\(default\\)\")"
     ]
   }
 }

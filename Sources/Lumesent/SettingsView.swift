@@ -99,6 +99,9 @@ struct SettingsView: View {
             if !permissionChecker.allGranted {
                 PermissionBanner(permissionChecker: permissionChecker)
             }
+            if permissionChecker.allGranted && !permissionChecker.hasNotifications {
+                NotificationPermissionBanner()
+            }
 
             NavigationSplitView {
                 ScrollView {
@@ -252,6 +255,10 @@ struct PermissionOKIndicator: View {
                     ProgressView()
                         .controlSize(.small)
                         .scaleEffect(0.6)
+                } else if !permissionChecker.hasNotifications {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.orange)
                 } else {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 13))
@@ -271,6 +278,7 @@ struct PermissionOKIndicator: View {
 
                 PermissionStatusRow(label: "Full Disk Access", ok: permissionChecker.hasFullDiskAccess)
                 PermissionStatusRow(label: "Accessibility", ok: permissionChecker.hasAccessibility)
+                PermissionStatusRow(label: "Notifications", ok: permissionChecker.hasNotifications)
             }
             .padding(12)
             .frame(width: 200)
@@ -330,6 +338,16 @@ struct PermissionBanner: View {
                         }
                     )
                 }
+
+                if !permissionChecker.hasNotifications {
+                    PermissionRow(
+                        title: "Notifications",
+                        description: "Optional — allows Lumesent to send native macOS notifications via the --send --alert-type notification CLI command. Without this, only full-screen and banner alerts work.",
+                        action: {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
+                        }
+                    )
+                }
             }
 
             Text("Grant permissions in System Settings, then return here. This banner disappears automatically.")
@@ -362,6 +380,37 @@ struct PermissionBanner: View {
             )
         )
         .foregroundStyle(.white)
+    }
+}
+
+struct NotificationPermissionBanner: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bell.badge.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Notification permission not granted")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Native macOS notifications (--alert-type notification) won't work without this. Full-screen and banner alerts are unaffected.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Open Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 }
 
@@ -873,6 +922,8 @@ struct RuleCard: View {
                     LabelSuggestingField(text: $rule.label, allLabels: allLabels)
 
                     DisplayModePicker(displayMode: $rule.displayMode)
+
+                    Toggle("Focus source on dismiss", isOn: $rule.focusSourceOnDismiss)
 
                     HStack {
                         Button("Test this rule") {

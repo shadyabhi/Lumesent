@@ -7,6 +7,7 @@ struct NotificationRecord: Identifiable {
     let body: String
     let deliveredDate: Date
     private let overrideAppName: String?
+    let sourceContext: SourceContext?
 
     init(id: Int64, appIdentifier: String, title: String, body: String, deliveredDate: Date) {
         self.id = id
@@ -15,6 +16,7 @@ struct NotificationRecord: Identifiable {
         self.body = body
         self.deliveredDate = deliveredDate
         self.overrideAppName = nil
+        self.sourceContext = nil
     }
 
     var appName: String {
@@ -31,17 +33,19 @@ struct NotificationRecord: Identifiable {
             title: ext.title,
             body: ext.resolvedBody,
             deliveredDate: Date(),
-            overrideAppName: ext.resolvedAppName
+            overrideAppName: ext.resolvedAppName,
+            sourceContext: ext.sourceContext
         )
     }
 
-    private init(id: Int64, appIdentifier: String, title: String, body: String, deliveredDate: Date, overrideAppName: String?) {
+    private init(id: Int64, appIdentifier: String, title: String, body: String, deliveredDate: Date, overrideAppName: String?, sourceContext: SourceContext?) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.title = title
         self.body = body
         self.deliveredDate = deliveredDate
         self.overrideAppName = overrideAppName
+        self.sourceContext = sourceContext
     }
 }
 
