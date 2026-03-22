@@ -6,38 +6,54 @@ extension Notification.Name {
     static let lumesentNavigateToTab = Notification.Name("com.shadyabhi.Lumesent.navigateToTab")
 }
 
-// ── CLI: --help ──
-if CommandLine.arguments.contains("--help") || CommandLine.arguments.contains("-h") {
+// ── CLI routing ──
+let args = CommandLine.arguments
+let subcommand = args.count > 1 ? args[1] : nil
+
+// ── Lumesent --help / Lumesent -h ──
+if subcommand == "--help" || subcommand == "-h" {
     let help = """
     Lumesent — macOS notification monitor with full-screen alerts
 
     USAGE
-      Lumesent                      Launch the menu bar app
-      Lumesent --send [options]     Send an external notification to the running app
+      Lumesent                Launch the menu bar app
+      Lumesent send [options] Send a notification to the running app
 
-    SEND OPTIONS
-      --title <text>        (required) Notification title
-      --body <text>         Notification body
-      --app-name <text>     App name shown in the alert (default: "External")
-      --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
-      --alert-type <type>   "fullscreen" (default) or "notification" (native macOS notification)
-      --no-focus-source     Don't focus the source terminal after alert dismiss (default: focus)
-
-    EXAMPLES
-      Lumesent --send --title "Build failed" --body "exit code 1"
-      Lumesent --send --title "Deploy complete" --app-name "CI" --display-mode sticky
-      Lumesent --send --title "Done!" --alert-type notification
-
-    External notifications bypass filter rules and are always displayed (unless paused).
-    The app must already be running for --send to work.
+    Run 'Lumesent send --help' for send options.
     """
     print(help)
     exit(0)
 }
 
-// ── CLI: --send --title "…" [--body "…"] [--app-name "…"] [--display-mode sticky|timed] [--alert-type fullscreen|notification] ──
-if CommandLine.arguments.contains("--send") {
-    let args = CommandLine.arguments
+// ── Lumesent send ──
+if subcommand == "send" {
+    // Lumesent send --help / Lumesent send -h
+    if args.contains("--help") || args.contains("-h") {
+        let help = """
+        Send a notification to the running Lumesent app.
+
+        USAGE
+          Lumesent send --title <text> [options]
+
+        OPTIONS
+          --title <text>        (required) Notification title
+          --body <text>         Notification body
+          --app-name <text>     App name shown in the alert (default: "External")
+          --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
+          --alert-type <type>   "fullscreen" (default) or "notification" (native macOS notification)
+          --no-focus-source     Don't focus the source terminal after alert dismiss
+
+        EXAMPLES
+          Lumesent send --title "Build failed" --body "exit code 1"
+          Lumesent send --title "Deploy complete" --app-name "CI" --display-mode sticky
+          Lumesent send --title "Done!" --alert-type notification
+
+        Bypasses filter rules — always displayed (unless paused).
+        The app must already be running.
+        """
+        print(help)
+        exit(0)
+    }
 
     func flagValue(_ flag: String) -> String? {
         guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
@@ -46,7 +62,7 @@ if CommandLine.arguments.contains("--send") {
 
     guard let title = flagValue("--title") else {
         fputs("error: --title is required\n", stderr)
-        fputs("usage: Lumesent --send --title \"…\" [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
+        fputs("usage: Lumesent send --title \"…\" [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
         exit(1)
     }
 

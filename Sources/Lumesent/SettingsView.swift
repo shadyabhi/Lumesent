@@ -1913,7 +1913,7 @@ struct InfoTab: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("CLI")
                                 .font(.system(size: 11, weight: .semibold))
-                            CopyableCodeBlock(text: "Lumesent --send --title \"Build done\" --body \"All tests passed\"")
+                            CopyableCodeBlock(text: "Lumesent send --title \"Build done\" --body \"All tests passed\"")
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
