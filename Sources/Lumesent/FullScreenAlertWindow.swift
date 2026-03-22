@@ -26,6 +26,7 @@ final class FullScreenAlertWindow {
     static let gridModel = AlertGridModel()
     private static var managed: [Managed] = []
     private static var keyMonitor: Any?
+    private static var activationObserver: Any?
     private static var currentDismissKey: DismissKeyShortcut?
     private static var currentLayout: AlertLayout = .fullScreen
 
@@ -129,11 +130,31 @@ final class FullScreenAlertWindow {
         }
 
         managed.first?.window.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
+
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard !managed.isEmpty else { return }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            managed.first?.window.orderFrontRegardless()
+        }
 
         if let dismissKey {
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if dismissKey.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) {
                     Self.dismiss()
+                }
+                // Block Cmd+Tab, Cmd+H, Cmd+Q while alert is showing
+                if event.modifierFlags.contains(.command) {
+                    let blocked: Set<UInt16> = [48, 4, 12] // Tab, H, Q
+                    if blocked.contains(event.keyCode) {
+                        return nil
+                    }
                 }
                 return event
             }
@@ -144,6 +165,10 @@ final class FullScreenAlertWindow {
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
+        }
+        if let observer = activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            activationObserver = nil
         }
 
         let copies = managed

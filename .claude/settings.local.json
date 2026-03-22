@@ -23,7 +23,8 @@
       "Bash(plutil:*)",
       "Bash(open:*)",
       "Bash(defaults read:*)",
-      "Bash(act --version)"
+      "Bash(act --version)",
+      "Bash(sips:*)"
     ]
   }
 }

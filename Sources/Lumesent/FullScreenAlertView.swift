@@ -13,8 +13,10 @@ struct AlertGridView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(backgroundOpacity)
+            VisualEffectBlur(material: .fullScreenUI, blendingMode: .behindWindow)
+                .opacity(model.cards.isEmpty ? 0 : 1)
                 .ignoresSafeArea()
+                .overlay(Color.black.opacity(backgroundOpacity))
                 .onTapGesture {
                     let hasSticky = model.cards.contains { $0.displayMode.isSticky }
                     if !hasSticky { onDismissAll() }
@@ -158,5 +160,23 @@ struct AlertCardView: View {
             return nil
         }
         return NSWorkspace.shared.icon(forFile: url.path)
+    }
+}
+
+struct VisualEffectBlur: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
     }
 }
