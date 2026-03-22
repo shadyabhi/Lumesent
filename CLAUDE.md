@@ -18,7 +18,7 @@ The .app bundle (`make build` / `make run`) is required for stable permission gr
 
 No tests, no linter, no third-party dependencies. Links against system `sqlite3` (via Package.swift). Logging uses `os.Logger` via `AppLog`. Targets macOS 14+.
 
-View app logs: `/usr/bin/log show --predicate 'process == "Lumesent" AND subsystem == "com.shadyabhi.Lumesent"' --last 60s --info --debug`
+View app logs: `/usr/bin/log show --predicate 'process == "logger"' --last 1h`
 
 ## Architecture
 

@@ -1,0 +1,145 @@
+# =============================================================================
+# Release workflow: builds a signed DMG and attaches it to a GitHub Release.
+#
+# Uses a free Apple Development certificate (no $99/yr program needed).
+# The cert provides a stable Team ID so users keep TCC permissions (Full Disk
+# Access, Accessibility) across upgrades. Users still need right-click → Open
+# on first launch (no notarization without paid Developer ID).
+#
+# SETUP INSTRUCTIONS (one-time)
+# ─────────────────────────────
+# 1. Create a free Apple Development certificate
+#    - Open Xcode → Settings → Accounts → add your Apple ID
+#    - Select your team → Manage Certificates → "+" → Apple Development
+#
+# 2. Export the certificate as .p12
+#    - Open Keychain Access → My Certificates
+#    - Find "Apple Development: your@email.com (TEAMID)"
+#    - Right-click → Export → save as dev-cert.p12, set a password
+#
+# 3. Base64-encode the .p12 for GitHub
+#    - Run: base64 -i dev-cert.p12 | pbcopy
+#
+# 4. Add GitHub repository secrets (Settings → Secrets and variables → Actions)
+#    - CERTIFICATE_P12        → paste the base64 string from your clipboard
+#    - CERTIFICATE_PASSWORD   → the password you set in step 2
+#
+# 5. Clean up
+#    - Run: rm dev-cert.p12
+#
+# CERTIFICATE RENEWAL (yearly)
+# ────────────────────────────
+# Free Apple Development certs expire after 1 year. When it expires:
+#    1. Xcode → Settings → Accounts → Manage Certificates → "+" → Apple Development
+#    2. Re-export the new cert as .p12 (steps 2-3 above)
+#    3. Update the CERTIFICATE_P12 and CERTIFICATE_PASSWORD secrets in GitHub
+#    The new cert keeps the same Team ID, so users keep their permissions.
+#
+# CREATING A RELEASE
+# ──────────────────
+# Push a version tag to trigger the build:
+#    git tag v0.1.0
+#    git push origin v0.1.0
+#
+# This creates a draft GitHub Release with the signed DMG attached.
+# Review it, then publish when ready.
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-dmg:
+    runs-on: macos-14
+    permissions:
+      contents: write  # needed to create GitHub Releases
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Import signing certificate into a temporary CI keychain ──
+      - name: Import code signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$CERTIFICATE_P12" ]; then
+            echo "ERROR: CERTIFICATE_P12 secret is not set."
+            echo "Follow the setup instructions in this workflow file."
+            exit 1
+          fi
+
+          # Decode the certificate
+          CERT_FILE=$(mktemp)
+          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_FILE"
+
+          # Create a temporary keychain (avoids polluting the default keychain)
+          KEYCHAIN="build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          # Configure the keychain:
+          #   - default: so codesign finds it automatically
+          #   - list: so security tools can see it
+          #   - unlock: so codesign can access keys without a GUI prompt
+          #   - set-keychain-settings: disable auto-lock timeout
+          security default-keychain -s "$KEYCHAIN"
+          security list-keychains -s "$KEYCHAIN" login.keychain-db
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
+
+          # Import the .p12 — the -T flag allows codesign to use it without prompts
+          security import "$CERT_FILE" \
+            -k "$KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -f pkcs12
+
+          # Allow codesign to access the imported key without a UI confirmation dialog
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          rm -f "$CERT_FILE"
+
+          # Verify the cert was imported
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning
+
+      # ── Build signed DMG (same command locally and in CI) ──
+      # make-dmg.sh uses Finder/AppleScript for icon layout.
+      # macOS CI runners have a GUI session, but if this step becomes flaky,
+      # replace make-dmg.sh internals with: hdiutil create -volname Lumesent -srcfolder Lumesent.app -ov -format UDZO Lumesent-VERSION.dmg
+      - name: Build signed DMG
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          # Strip leading 'v' from tag (v0.2.0 → 0.2.0)
+          export VERSION="${VERSION#v}"
+          make dmg
+          echo "── codesign verification ──"
+          codesign --verify --deep --strict --verbose=2 Lumesent.app
+
+      # ── Upload DMG to GitHub Release ──
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG_FILE="Lumesent-${VERSION}.dmg"
+
+          if [ ! -f "$DMG_FILE" ]; then
+            echo "ERROR: $DMG_FILE not found"
+            ls -la *.dmg 2>/dev/null || echo "No DMG files found"
+            exit 1
+          fi
+
+          echo "Uploading $DMG_FILE to release ${{ github.ref_name }}"
+
+          gh release create "${{ github.ref_name }}" \
+            "$DMG_FILE" \
+            --draft \
+            --title "Lumesent ${VERSION}" \
+            --generate-notes

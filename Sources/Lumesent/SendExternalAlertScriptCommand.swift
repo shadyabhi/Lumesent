@@ -1,9 +1,14 @@
 import AppKit
+import os
 
 /// Handles `tell application "Lumesent" to send external alert …` (bound via `Lumesent.sdef` cocoa class).
 @objc(SendExternalAlertScriptCommand)
 final class SendExternalAlertScriptCommand: NSScriptCommand {
+    private static let log = Logger(subsystem: "com.shadyabhi.Lumesent", category: "ScriptCommand")
+
     override func performDefaultImplementation() -> Any? {
+        NSLog("[Lumesent] SendExternalAlertScriptCommand.performDefaultImplementation called, directParameter=%@", String(describing: directParameter))
+        Self.log.warning("performDefaultImplementation called, directParameter=\(String(describing: self.directParameter), privacy: .public)")
         let title = string(from: directParameter)
         guard let title, !title.isEmpty else {
             scriptErrorNumber = -50 // paramErr

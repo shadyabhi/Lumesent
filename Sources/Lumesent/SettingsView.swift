@@ -646,8 +646,14 @@ struct RulesTab: View {
     }
 
     private func addRule() {
+        // Don't open another if we're already editing an empty/unsaved rule
+        if let editing = editingRule,
+           let existing = ruleStore.rules.first(where: { $0.id == editing.id }),
+           existing.appIdentifier.isEmpty && existing.titleContains.isEmpty && existing.bodyContains.isEmpty {
+            return
+        }
         let rule = FilterRule()
-        ruleStore.rules.append(rule)
+        ruleStore.rules.insert(rule, at: 0)
         editingRule = rule
         save()
     }
@@ -803,6 +809,13 @@ struct RuleCard: View {
         history.matchedEntries(for: rule.id)
     }
 
+    /// Average matches per hour over the last 4 hours.
+    private var matchesPerHour: Double {
+        let cutoff = Date().addingTimeInterval(-4 * 3600)
+        let recentCount = matchedEntries.filter { $0.date >= cutoff }.count
+        return Double(recentCount) / 4.0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row (tap icon / summary / spacer / chevron to expand; toggle + trash stay separate)
@@ -840,6 +853,10 @@ struct RuleCard: View {
                                         Image(systemName: "bell.fill")
                                             .font(.system(size: 8))
                                         Text("\(matchedEntries.count)")
+                                            .font(.system(size: 10, weight: .medium))
+                                        Text("·")
+                                            .font(.system(size: 10))
+                                        Text(String(format: "%.1f/hr", matchesPerHour))
                                             .font(.system(size: 10, weight: .medium))
                                     }
                                     .padding(.horizontal, 6)
@@ -1615,13 +1632,79 @@ struct SettingsTab: View {
     private var screensBinding: Binding<AlertScreens> {
         Binding(
             get: { appSettings.alertPresentation.screens },
-            set: {
+            set: { newValue in
                 appSettings.alertPresentation = AlertPresentation(
                     layout: appSettings.alertPresentation.layout,
-                    screens: $0
+                    screens: newValue
                 )
+                flashScreens(mode: newValue)
             }
         )
+    }
+
+    private func flashScreens(mode: AlertScreens) {
+        let mainScreen = NSScreen.main ?? NSScreen.screens.first
+        var windows: [NSWindow] = []
+
+        for screen in NSScreen.screens {
+            let isMain = (screen == mainScreen)
+            let message: String
+            switch mode {
+            case .main:
+                message = isMain ? "✓ This is your main display" : ""
+            case .allScreens:
+                message = "✓ Lumesent covers this display"
+            }
+            guard !message.isEmpty else { continue }
+
+            let window = NSWindow(
+                contentRect: screen.frame,
+                styleMask: .borderless,
+                backing: .buffered,
+                defer: false
+            )
+            window.level = .screenSaver
+            window.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15)
+            window.isOpaque = false
+            window.hasShadow = false
+            window.ignoresMouseEvents = true
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+            let label = NSTextField(labelWithString: message)
+            label.font = .systemFont(ofSize: 28, weight: .medium)
+            label.textColor = .white
+            label.alignment = .center
+            label.sizeToFit()
+            label.frame.origin = NSPoint(
+                x: (screen.frame.width - label.frame.width) / 2,
+                y: (screen.frame.height - label.frame.height) / 2
+            )
+
+            let container = NSView(frame: screen.frame)
+            container.addSubview(label)
+            window.contentView = container
+
+            window.setFrame(screen.frame, display: false)
+            window.alphaValue = 0
+            window.orderFrontRegardless()
+            windows.append(window)
+        }
+
+        guard !windows.isEmpty else { return }
+
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.15
+            for w in windows { w.animator().alphaValue = 1 }
+        }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NSAnimationContext.runAnimationGroup({ ctx in
+                    ctx.duration = 0.3
+                    for w in windows { w.animator().alphaValue = 0 }
+                }) {
+                    for w in windows { w.orderOut(nil) }
+                }
+            }
+        }
     }
 
     private var loginServiceToggleBinding: Binding<Bool> {
