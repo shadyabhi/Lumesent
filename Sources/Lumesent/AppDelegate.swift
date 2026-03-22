@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var appSettings: AppSettings!
     private var notificationHistory: NotificationHistory!
     private var permissionChecker: PermissionChecker!
+    private var notificationServer: NotificationServer!
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var permissionObservation: Any?
@@ -65,6 +66,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         applyActivationPolicyFromSettings()
         setupMenuBar()
         setupMainMenu()
+
+        notificationServer = NotificationServer { [weak self] ext in
+            self?.handleExternalNotification(ext)
+        }
+        notificationServer.start()
 
         appSettings.$showInDock
             .dropFirst()
@@ -444,7 +450,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         return false
     }
 
-    func handleExternalNotification(_ ext: ExternalNotification) {
+    private func handleExternalNotification(_ ext: ExternalNotification) {
         let record = NotificationRecord.fromExternal(ext)
         AppLog.shared.info("external notification: title=\(record.title, privacy: .public) app=\(record.appName, privacy: .public) alertType=\(ext.alertType ?? "fullscreen", privacy: .public) displayMode=\(String(describing: ext.displayMode), privacy: .public)")
         notificationHistory.record(record, matched: true, matchedRuleId: nil)

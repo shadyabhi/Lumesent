@@ -9,9 +9,6 @@ let package = Package(
         .executableTarget(
             name: "Lumesent",
             path: "Sources/Lumesent",
-            resources: [
-                .copy("../../Resources/Lumesent.sdef"),
-            ],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),
             ]

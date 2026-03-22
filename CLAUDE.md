@@ -44,7 +44,7 @@ NotificationMonitor → AppDelegate.handleNewNotification → FilterEngine.match
 
 ### External Notifications
 
-AppleScript / `osascript`: `tell application "Lumesent" to send external alert "title" body text "…"` with optional labeled parameters (`application name`, `display mode` sticky|timed, `alert type` fullscreen|notification, `focus source terminal` true|false). Implemented via [`Lumesent.sdef`](Resources/Lumesent.sdef) and [`SendExternalAlertScriptCommand`](Sources/Lumesent/SendExternalAlertScriptCommand.swift). Bypasses filter rules — always shows an alert (unless paused). The calling app may need Automation permission to control Lumesent.
+CLI: `Lumesent --send --title "…" [--body "…"] [--app-name "…"] [--display-mode sticky|timed] [--alert-type fullscreen|notification] [--no-focus-source]`. Connects to the running app via a Unix domain socket (`notify.sock` in Application Support). Implemented via [`NotificationServer`](Sources/Lumesent/NotificationServer.swift) (server) and the `--send` CLI path in [`main.swift`](Sources/Lumesent/main.swift) (client). Bypasses filter rules — always shows an alert (unless paused). Auto-detects tmux/iTerm source context for focus-on-dismiss.
 
 ### UI
 

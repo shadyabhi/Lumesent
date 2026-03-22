@@ -28,7 +28,8 @@
       "Bash(gh repo:*)",
       "Bash(gh run:*)",
       "Bash(gh release:*)",
-      "Bash(pkill -x Lumesent)"
+      "Bash(pkill -x Lumesent)",
+      "Bash(nm /Users/shadyabhi/coder/lumesent/Lumesent.app/Contents/MacOS/Lumesentkj)"
     ]
   }
 }
