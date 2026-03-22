@@ -250,7 +250,8 @@ struct PermissionOKIndicator: View {
             .frame(width: 20, height: 20)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .focusEffectDisabled()
         .help("Permission status — click to check")
         .popover(isPresented: $showingDetail, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
