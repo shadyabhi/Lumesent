@@ -23,6 +23,7 @@ final class FullScreenAlertWindow {
     private static var dismissTimer: Timer?
     private static var keyMonitor: Any?
     private static var currentSourceContext: SourceContext?
+    private static var currentAppIdentifier: String?
     private static var shouldFocusSourceOnDismiss: Bool = true
 
     static func show(
@@ -86,6 +87,7 @@ final class FullScreenAlertWindow {
 
         shouldFocusSourceOnDismiss = focusSourceOnDismiss
         currentSourceContext = notification.sourceContext
+        currentAppIdentifier = notification.appIdentifier
         let layout = presentation.layout
         for screen in screens {
             let window = NSWindow(
@@ -190,6 +192,18 @@ final class FullScreenAlertWindow {
 
     private static let log = Logger(subsystem: "com.shadyabhi.Lumesent", category: "FocusSource")
 
+    /// Activate an app by bundle identifier (used for system notifications).
+    private static func activateApp(bundleId: String) {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            log.notice("activateApp: no app found for \(bundleId, privacy: .public)")
+            return
+        }
+        log.notice("activateApp: activating \(bundleId, privacy: .public)")
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+    }
+
     /// Activate the terminal window/pane that sent the notification.
     static func focusSource(_ ctx: SourceContext) {
         log.notice("focusSource: tmux=\(ctx.tmuxSession ?? "nil", privacy: .public):\(ctx.tmuxWindow ?? "nil", privacy: .public):\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
@@ -241,7 +255,9 @@ final class FullScreenAlertWindow {
 
         // Grab and clear source context before closing windows
         let sourceCtx = currentSourceContext
+        let appId = currentAppIdentifier
         currentSourceContext = nil
+        currentAppIdentifier = nil
         let willPresentQueued = !alertQueue.isEmpty
 
         for m in copies {
@@ -261,8 +277,12 @@ final class FullScreenAlertWindow {
         }
 
         // Focus source only when nothing else is queued (avoid stealing focus before the next alert)
-        if shouldFocusSourceOnDismiss, let ctx = sourceCtx, !willPresentQueued {
-            focusSource(ctx)
+        if shouldFocusSourceOnDismiss, !willPresentQueued {
+            if let ctx = sourceCtx {
+                focusSource(ctx)
+            } else if let bundleId = appId {
+                activateApp(bundleId: bundleId)
+            }
         }
         shouldFocusSourceOnDismiss = true
 
