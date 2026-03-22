@@ -1,4 +1,4 @@
-name: Nightly
+name: Build on HEAD
 
 on:
   push:
@@ -49,17 +49,17 @@ jobs:
 
       - name: Build signed DMG
         env:
-          VERSION: nightly
+          VERSION: head
         run: |
           make dmg
           echo "── codesign verification ──"
           codesign --verify --deep --strict --verbose=2 Lumesent.app
 
-      - name: Update nightly release
+      - name: Update head release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          DMG_FILE="Lumesent-nightly.dmg"
+          DMG_FILE="Lumesent-head.dmg"
 
           if [ ! -f "$DMG_FILE" ]; then
             echo "ERROR: $DMG_FILE not found"
@@ -68,14 +68,14 @@ jobs:
           fi
 
           SHORT_SHA="${GITHUB_SHA::7}"
-          TITLE="Lumesent Nightly (${SHORT_SHA})"
+          TITLE="Lumesent HEAD (${SHORT_SHA})"
           NOTES="Built from \`main\` at ${GITHUB_SHA}
 
           Commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
 
-          # Delete existing nightly release (if any), then recreate
-          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-          gh release create nightly \
+          # Delete existing head release (if any), then recreate
+          gh release delete head --yes --cleanup-tag 2>/dev/null || true
+          gh release create head \
             "$DMG_FILE" \
             --title "$TITLE" \
             --notes "$NOTES" \
