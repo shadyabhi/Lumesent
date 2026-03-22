@@ -57,13 +57,3 @@ make clean    # Remove build artifacts
 swift build   # Quick debug build (no .app bundle)
 swift run     # Run from source (no .app bundle)
 ```
-
-## How it works
-
-**Pipeline:** NotificationMonitor → FilterEngine → FullScreenAlertWindow
-
-1. **NotificationMonitor** uses AXObserver to watch `com.apple.notificationcenterui` for real-time notification events, with a 5-second poll fallback. It reads the system notification SQLite database in WAL mode and parses binary plist blobs.
-2. **FilterEngine** evaluates each notification against the user's rules.
-3. **FullScreenAlertWindow** renders a borderless window at screen-saver level for matched notifications.
-
-The app bootstraps `NSApplication` directly in `main.swift` with SwiftUI views hosted in AppKit windows — no storyboards or xibs.

@@ -64,6 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         applyActivationPolicyFromSettings()
         setupMenuBar()
+        setupMainMenu()
 
         appSettings.$showInDock
             .dropFirst()
@@ -117,7 +118,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     private func applyActivationPolicyFromSettings() {
-        NSApp.setActivationPolicy(appSettings.showInDock ? .regular : .accessory)
+        if appSettings.showInDock {
+            NSApp.setActivationPolicy(.regular)
+        } else {
+            // Use .regular when a window is visible so the menu bar (Cmd+W/Q) works;
+            // fall back to .accessory when all windows are closed.
+            let hasVisibleWindow = (settingsWindow?.isVisible == true) || (onboardingWindow?.isVisible == true)
+            NSApp.setActivationPolicy(hasVisibleWindow ? .regular : .accessory)
+        }
     }
 
     /// Keeps onboarding/settings above other apps until FDA + Accessibility are granted.
@@ -164,6 +172,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         syncPermissionGatedWindowLevels()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        applyActivationPolicyFromSettings()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window)
     }
 
     private func updateMenuBarIcon() {
@@ -189,6 +204,54 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         menu.delegate = self
         statusItem.menu = menu
         rebuildMenu()
+    }
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // Application menu
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit Lumesent", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        // File menu
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+
+        // Rules submenu
+        let rulesItem = NSMenuItem(title: "Rules", action: nil, keyEquivalent: "")
+        let rulesMenu = NSMenu(title: "Rules")
+        rulesMenu.addItem(withTitle: "Active", action: #selector(navigateToRulesActive), keyEquivalent: "")
+        rulesMenu.addItem(withTitle: "Unmatched", action: #selector(navigateToUnmatched), keyEquivalent: "")
+        rulesItem.submenu = rulesMenu
+        fileMenu.addItem(rulesItem)
+
+        fileMenu.addItem(withTitle: "Settings", action: #selector(navigateToSettings), keyEquivalent: ",")
+
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func navigateToRulesActive() {
+        openSettings()
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "rulesActive")
+    }
+
+    @objc private func navigateToUnmatched() {
+        openSettings()
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "unmatched")
+    }
+
+    @objc private func navigateToSettings() {
+        openSettings()
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "settings")
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -498,11 +561,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         syncPermissionGatedWindowLevels()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        applyActivationPolicyFromSettings()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window)
     }
 
     private func testRule(_ rule: FilterRule) {
         let record = rule.previewNotificationRecord()
         presentAlert(for: record, displayMode: rule.displayMode)
+    }
+
+    @objc private func windowDidClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+        if window === settingsWindow { settingsWindow = nil }
+        if window === onboardingWindow { onboardingWindow = nil }
+        applyActivationPolicyFromSettings()
     }
 
     @objc private func quit() {

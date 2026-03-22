@@ -134,6 +134,16 @@ struct SettingsView: View {
         }
         .frame(minWidth: 720, minHeight: 440)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onReceive(NotificationCenter.default.publisher(for: .lumesentNavigateToTab)) { notification in
+            if let tab = notification.object as? String {
+                switch tab {
+                case "rulesActive": selectedSidebarItem = .rulesActive
+                case "unmatched": selectedSidebarItem = .unmatched
+                case "settings": selectedSidebarItem = .settings
+                default: break
+                }
+            }
+        }
     }
 
     private func settingsSidebarRow(title: String, systemImage: String, item: SettingsSidebarItem) -> some View {

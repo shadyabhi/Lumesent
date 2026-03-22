@@ -3,6 +3,7 @@ import Foundation
 
 extension Notification.Name {
     static let lumesentOpenSettings = Notification.Name("com.shadyabhi.Lumesent.openSettings")
+    static let lumesentNavigateToTab = Notification.Name("com.shadyabhi.Lumesent.navigateToTab")
 }
 
 // ── CLI: --help ──
