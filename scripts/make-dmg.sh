@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$REPO_ROOT/Lumesent.app"
-VERSION="$(cat "$REPO_ROOT/VERSION" | tr -d '[:space:]')"
+VERSION="${VERSION:-$(cd "$REPO_ROOT" && git describe --always --dirty 2>/dev/null || echo 'unknown')}"
 DMG_NAME="Lumesent-${VERSION}"
 DMG_DIR="$REPO_ROOT/.build/dmg"
 DMG_TEMP="$REPO_ROOT/.build/$DMG_NAME-temp.dmg"

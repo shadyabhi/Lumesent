@@ -21,7 +21,9 @@
       "Bash(./Lumesent.app/Contents/MacOS/Lumesent:*)",
       "Bash(find:*)",
       "Bash(plutil:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(defaults read:*)",
+      "Bash(act --version)"
     ]
   }
 }

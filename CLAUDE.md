@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make build                  # Release build + bundle .app
 make run                    # Build, kill any running instance, and open .app
-make dmg                    # Build + create installer DMG (reads VERSION file)
+make dmg                    # Build + create installer DMG (version from git)
 make clean                  # Remove .build/ and Lumesent.app/
 swift build                 # Quick debug build (no .app bundle)
 ```
@@ -64,4 +64,4 @@ The app requires **Full Disk Access** (notification DB readability) and **Access
 
 ## Build & Signing
 
-`scripts/bundle.sh` creates the .app structure and resolves signing identity (prefers Apple Development > Developer ID > ad-hoc). Version comes from the `VERSION` file, substituted into Info.plist at build time.
+`scripts/bundle.sh` creates the .app structure and resolves signing identity (prefers Apple Development > Developer ID > ad-hoc). Version comes from the git hash (locally) or the tag name (CI), substituted into Info.plist at build time.
