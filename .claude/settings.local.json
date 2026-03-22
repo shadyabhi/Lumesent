@@ -26,7 +26,8 @@
       "Bash(act --version)",
       "Bash(sips:*)",
       "Bash(gh repo:*)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(gh release:*)"
     ]
   }
 }
