@@ -209,10 +209,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let rulesItem = NSMenuItem(title: "Rules", action: nil, keyEquivalent: "")
         let rulesMenu = NSMenu(title: "Rules")
         rulesMenu.addItem(withTitle: "Active", action: #selector(navigateToRulesActive), keyEquivalent: "")
-        rulesMenu.addItem(withTitle: "Unmatched", action: #selector(navigateToUnmatched), keyEquivalent: "")
         rulesItem.submenu = rulesMenu
         fileMenu.addItem(rulesItem)
 
+        fileMenu.addItem(withTitle: "History", action: #selector(navigateToHistory), keyEquivalent: "")
         fileMenu.addItem(withTitle: "Settings", action: #selector(navigateToSettings), keyEquivalent: ",")
 
         fileMenu.addItem(NSMenuItem.separator())
@@ -229,9 +229,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "rulesActive")
     }
 
-    @objc private func navigateToUnmatched() {
+    @objc private func navigateToHistory() {
         openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "unmatched")
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "history")
     }
 
     @objc private func navigateToSettings() {

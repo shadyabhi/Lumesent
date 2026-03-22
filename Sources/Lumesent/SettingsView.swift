@@ -23,13 +23,13 @@ struct SettingsView: View {
 
     enum SettingsSidebarItem: Hashable {
         case rulesActive
-        case unmatched
+        case history
         case settings
 
         var detailTitle: String {
             switch self {
             case .rulesActive: return "Active"
-            case .unmatched: return "Unmatched"
+            case .history: return "History"
             case .settings: return "Settings"
             }
         }
@@ -93,10 +93,13 @@ struct SettingsView: View {
                                 systemImage: "checkmark.circle",
                                 item: .rulesActive
                             )
+                        }
+
+                        SettingsSidebarGroup(title: "History") {
                             settingsSidebarRow(
-                                title: "Unmatched",
-                                systemImage: "bell.slash",
-                                item: .unmatched
+                                title: "History",
+                                systemImage: "clock.arrow.circlepath",
+                                item: .history
                             )
                         }
 
@@ -119,8 +122,8 @@ struct SettingsView: View {
                         switch selectedSidebarItem {
                         case .rulesActive:
                             RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
-                        case .unmatched:
-                            UnmatchedTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+                        case .history:
+                            HistoryTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         case .settings:
                             SettingsTab(appSettings: appSettings, history: history)
                         }
@@ -138,7 +141,7 @@ struct SettingsView: View {
             if let tab = notification.object as? String {
                 switch tab {
                 case "rulesActive": selectedSidebarItem = .rulesActive
-                case "unmatched": selectedSidebarItem = .unmatched
+                case "history": selectedSidebarItem = .history
                 case "settings": selectedSidebarItem = .settings
                 default: break
                 }
@@ -759,7 +762,7 @@ struct LabelChip: View {
     }
 }
 
-// MARK: - Settings detail section chrome (Rules, Unmatched, settings pane, rule editor, etc.)
+// MARK: - Settings detail section chrome (Rules, History, settings pane, rule editor, etc.)
 
 private struct SettingsDetailSectionCard<Content: View>: View {
     let title: String
@@ -1196,28 +1199,28 @@ struct MatchedNotificationRow: View {
     }
 }
 
-// MARK: - Unmatched Notifications Tab
+// MARK: - History Tab
 
-struct UnmatchedTab: View {
+struct HistoryTab: View {
     @ObservedObject var history: NotificationHistory
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
-    private var unmatchedEntries: [HistoryEntry] {
-        history.entries.filter { !$0.matched }.reversed()
+    private var historyEntries: [HistoryEntry] {
+        history.entries.reversed()
     }
 
     var body: some View {
-        if unmatchedEntries.isEmpty {
+        if historyEntries.isEmpty {
             VStack(spacing: 14) {
-                Image(systemName: "checkmark.circle")
+                Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 40))
-                    .foregroundStyle(.green.opacity(0.5))
-                Text("All caught up")
+                    .foregroundStyle(.secondary.opacity(0.5))
+                Text("No notifications yet")
                     .font(.title3)
                     .foregroundStyle(.secondary)
-                Text("No unmatched notifications.\nNotifications that don't match any rule will appear here.")
+                Text("Notifications will appear here as they arrive.")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
@@ -1225,10 +1228,10 @@ struct UnmatchedTab: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                SettingsDetailSectionCard(title: "Unmatched notifications") {
+                SettingsDetailSectionCard(title: "Notification history") {
                     LazyVStack(spacing: 8) {
-                        ForEach(unmatchedEntries) { entry in
-                            UnmatchedRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+                        ForEach(historyEntries) { entry in
+                            HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         }
                     }
                 }
@@ -1239,9 +1242,9 @@ struct UnmatchedTab: View {
     }
 }
 
-// MARK: - Unmatched Notification Row
+// MARK: - History Notification Row
 
-struct UnmatchedRow: View {
+struct HistoryRow: View {
     let entry: HistoryEntry
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var appSettings: AppSettings
@@ -1262,6 +1265,15 @@ struct UnmatchedRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
+                    if entry.matched {
+                        Text("matched")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.green.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
                     Text(relativeTime(entry.date))
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
@@ -1326,7 +1338,7 @@ struct UnmatchedRow: View {
     }
 }
 
-// MARK: - Quick Rule Creator (popover from unmatched notification)
+// MARK: - Quick Rule Creator (popover from history notification)
 
 struct QuickRuleCreator: View {
     let entry: HistoryEntry
