@@ -24,7 +24,9 @@
       "Bash(open:*)",
       "Bash(defaults read:*)",
       "Bash(act --version)",
-      "Bash(sips:*)"
+      "Bash(sips:*)",
+      "Bash(gh repo:*)",
+      "Bash(gh run:*)"
     ]
   }
 }
