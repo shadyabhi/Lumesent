@@ -29,7 +29,8 @@
       "Bash(gh run:*)",
       "Bash(gh release:*)",
       "Bash(pkill -x Lumesent)",
-      "Bash(nm /Users/shadyabhi/coder/lumesent/Lumesent.app/Contents/MacOS/Lumesentkj)"
+      "Bash(nm /Users/shadyabhi/coder/lumesent/Lumesent.app/Contents/MacOS/Lumesentkj)",
+      "Bash(bash scripts/make-dmg.sh 2>&1)"
     ]
   }
 }

@@ -1,3 +1,5 @@
 .swiftpm/
 .build/
 Lumesent.app/
+*.dmg
+.claude
