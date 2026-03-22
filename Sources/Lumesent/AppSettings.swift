@@ -31,6 +31,7 @@ class AppSettings: ObservableObject {
     @Published var alertPresentation: AlertPresentation = .default
     /// When non-nil and in the future, matched alerts are suppressed.
     @Published var pauseAlertsUntil: Date?
+    @Published var socketPath: String = FileLocations.defaultSocketPath
 
     private let fileURL: URL
 
@@ -50,7 +51,8 @@ class AppSettings: ObservableObject {
                 dismissKey: dismissKey,
                 showInDock: showInDock,
                 alertPresentation: alertPresentation,
-                pauseAlertsUntil: pauseAlertsUntil
+                pauseAlertsUntil: pauseAlertsUntil,
+                socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath
             ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -71,6 +73,7 @@ class AppSettings: ObservableObject {
         showInDock = decoded.showInDock
         alertPresentation = decoded.alertPresentation
         pauseAlertsUntil = decoded.pauseAlertsUntil
+        socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -79,5 +82,6 @@ class AppSettings: ObservableObject {
         var showInDock: Bool = false
         var alertPresentation: AlertPresentation = .default
         var pauseAlertsUntil: Date?
+        var socketPath: String?
     }
 }

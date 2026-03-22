@@ -25,14 +25,12 @@ struct SettingsView: View {
         case rulesActive
         case unmatched
         case settings
-        case info
 
         var detailTitle: String {
             switch self {
             case .rulesActive: return "Active"
             case .unmatched: return "Unmatched"
             case .settings: return "Settings"
-            case .info: return "Info"
             }
         }
     }
@@ -108,11 +106,6 @@ struct SettingsView: View {
                                 systemImage: "gearshape",
                                 item: .settings
                             )
-                            settingsSidebarRow(
-                                title: "Info",
-                                systemImage: "info.circle",
-                                item: .info
-                            )
                         }
                     }
                     .padding(12)
@@ -130,8 +123,6 @@ struct SettingsView: View {
                             UnmatchedTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         case .settings:
                             SettingsTab(appSettings: appSettings, history: history)
-                        case .info:
-                            InfoTab()
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -149,7 +140,6 @@ struct SettingsView: View {
                 case "rulesActive": selectedSidebarItem = .rulesActive
                 case "unmatched": selectedSidebarItem = .unmatched
                 case "settings": selectedSidebarItem = .settings
-                case "info": selectedSidebarItem = .info
                 default: break
                 }
             }
@@ -1634,6 +1624,8 @@ struct SettingsTab: View {
     @State private var showingServiceStatus = false
     @State private var serviceStatusMessage = ""
     @State private var showingClearHistoryConfirmation = false
+    @State private var editingSocketPath: String = ""
+    @State private var isEditingSocketPath: Bool = false
 
     /// AppKit label color: reliable on grouped controls; `.secondary` inside `Toggle` labels can render nearly invisible on macOS.
     private var captionColor: Color { Color(nsColor: .secondaryLabelColor) }
@@ -1774,23 +1766,70 @@ struct SettingsTab: View {
                 }
 
                 SettingsDetailSectionCard(title: "Application") {
-                    HStack(alignment: .top, spacing: 12) {
-                        Toggle("", isOn: $appSettings.showInDock)
-                            .labelsHidden()
-                            .toggleStyle(.checkbox)
-                            .accessibilityLabel("Show icon in Dock")
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Toggle("", isOn: $appSettings.showInDock)
+                                .labelsHidden()
+                                .toggleStyle(.checkbox)
+                                .accessibilityLabel("Show icon in Dock")
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Show icon in Dock")
-                                .font(.system(size: 13))
-                            Text("Off keeps Lumesent as a menu bar–only app.")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show icon in Dock")
+                                    .font(.system(size: 13))
+                                Text("Off keeps Lumesent as a menu bar–only app.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(captionColor)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .onChange(of: appSettings.showInDock) { _, _ in
+                            appSettings.save()
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Socket path")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Unix socket used for external notifications via the CLI.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(captionColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(spacing: 8) {
+                                TextField("", text: $editingSocketPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .disabled(!isEditingSocketPath)
+                                if isEditingSocketPath {
+                                    if editingSocketPath != appSettings.socketPath {
+                                        Button("Save") {
+                                            appSettings.socketPath = editingSocketPath
+                                            appSettings.save()
+                                            isEditingSocketPath = false
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                    }
+                                } else {
+                                    Button("Edit") {
+                                        isEditingSocketPath = true
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                                if editingSocketPath != FileLocations.defaultSocketPath {
+                                    Button("Reset") {
+                                        editingSocketPath = FileLocations.defaultSocketPath
+                                        appSettings.socketPath = FileLocations.defaultSocketPath
+                                        appSettings.save()
+                                        isEditingSocketPath = false
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .onChange(of: appSettings.showInDock) { _, _ in
-                        appSettings.save()
+                        .onAppear { editingSocketPath = appSettings.socketPath }
                     }
                 }
 
@@ -1884,107 +1923,6 @@ struct SettingsTab: View {
         } message: {
             Text("This will permanently delete all stored notification history. This cannot be undone.")
         }
-    }
-}
-
-// MARK: - Info Tab
-
-struct InfoTab: View {
-    private let socketPath = FileLocations.appSupportDirectory.appendingPathComponent("notify.sock").path
-
-    private var captionColor: Color { Color(nsColor: .secondaryLabelColor) }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsDetailSectionCard(title: "Send notifications via socket") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Lumesent listens on a Unix socket for external notifications. Send a JSON payload to trigger an alert directly, bypassing filter rules.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(captionColor)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Socket")
-                                .font(.system(size: 11, weight: .semibold))
-                            CopyableCodeBlock(text: socketPath)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("CLI")
-                                .font(.system(size: 11, weight: .semibold))
-                            CopyableCodeBlock(text: "Lumesent send --title \"Build done\" --body \"All tests passed\"")
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Options")
-                                .font(.system(size: 11, weight: .semibold))
-                            VStack(alignment: .leading, spacing: 2) {
-                                optionRow("--title", "Required. Alert title.")
-                                optionRow("--body", "Alert body text.")
-                                optionRow("--app-name", "Source app name.")
-                                optionRow("--display-mode", "sticky or timed (default).")
-                                optionRow("--alert-type", "fullscreen (default) or notification.")
-                                optionRow("--no-focus-source", "Don't focus source app on dismiss.")
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
-            .padding(.top, 20)
-            .padding(.bottom, SettingsChromeLayout.detailContentHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private func optionRow(_ flag: String, _ desc: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text(flag)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.primary)
-                .frame(width: 130, alignment: .leading)
-            Text(desc)
-                .font(.system(size: 11))
-                .foregroundStyle(captionColor)
-        }
-    }
-}
-
-private struct CopyableCodeBlock: View {
-    let text: String
-    @State private var copied = false
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text(text)
-                .font(.system(size: 11, design: .monospaced))
-                .textSelection(.enabled)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 11))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 4)
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(6)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
-        )
     }
 }
 

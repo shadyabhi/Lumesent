@@ -7,4 +7,6 @@ enum FileLocations {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
+
+    static let defaultSocketPath: String = appSupportDirectory.appendingPathComponent("notify.sock").path
 }

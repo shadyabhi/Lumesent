@@ -1,13 +1,13 @@
 import Foundation
 
 final class NotificationServer {
-    private let socketPath: String
+    private var socketPath: String
     private var serverFD: Int32 = -1
     private let acceptQueue = DispatchQueue(label: "com.shadyabhi.Lumesent.notificationServer.accept")
     private let onNotification: (ExternalNotification) -> Void
 
-    init(onNotification: @escaping (ExternalNotification) -> Void) {
-        self.socketPath = FileLocations.appSupportDirectory.appendingPathComponent("notify.sock").path
+    init(socketPath: String = FileLocations.defaultSocketPath, onNotification: @escaping (ExternalNotification) -> Void) {
+        self.socketPath = socketPath
         self.onNotification = onNotification
     }
 
@@ -77,6 +77,12 @@ final class NotificationServer {
             close(fd)
         }
         unlink(socketPath)
+    }
+
+    func restart(socketPath: String) {
+        stop()
+        self.socketPath = socketPath
+        start()
     }
 
     deinit {

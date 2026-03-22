@@ -146,7 +146,7 @@ if subcommand == "send" {
         exit(1)
     }
 
-    let socketPath = FileLocations.appSupportDirectory.appendingPathComponent("notify.sock").path
+    let socketPath = AppSettings().socketPath
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { fputs("error: cannot create socket\n", stderr); exit(1) }
 

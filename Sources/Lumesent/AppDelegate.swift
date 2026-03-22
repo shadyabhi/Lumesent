@@ -60,7 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         setupMenuBar()
         setupMainMenu()
 
-        notificationServer = NotificationServer { [weak self] ext in
+        notificationServer = NotificationServer(socketPath: appSettings.socketPath) { [weak self] ext in
             self?.handleExternalNotification(ext)
         }
         notificationServer.start()
@@ -70,6 +70,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyActivationPolicyFromSettings()
+            }
+            .store(in: &cancellables)
+
+        appSettings.$socketPath
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newPath in
+                self?.notificationServer.restart(socketPath: newPath)
             }
             .store(in: &cancellables)
 
