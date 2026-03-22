@@ -21,8 +21,8 @@ class FilterEngine {
     private func matchesRule(_ n: NotificationRecord, _ r: FilterRule) -> Bool {
         // All non-empty fields must match (AND logic)
         if !r.appIdentifier.isEmpty {
-            guard n.appIdentifier.localizedCaseInsensitiveContains(r.appIdentifier) else {
-                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): app mismatch — want=\(r.appIdentifier, privacy: .public) got=\(n.appIdentifier, privacy: .public)")
+            guard r.appOperator.matches(n.appIdentifier, r.appIdentifier) else {
+                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): app mismatch — op=\(r.appOperator.rawValue, privacy: .public) pattern=\(r.appIdentifier, privacy: .public) got=\(n.appIdentifier, privacy: .public)")
                 return false
             }
         }

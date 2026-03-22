@@ -10,7 +10,16 @@ final class FullScreenAlertWindow {
         let finalFrame: NSRect
     }
 
+    private struct QueuedAlert {
+        let notification: NotificationRecord
+        let displayMode: AlertDisplayMode
+        let dismissKey: DismissKeyShortcut?
+        let presentation: AlertPresentation
+        let focusSourceOnDismiss: Bool
+    }
+
     private static var managed: [Managed] = []
+    private static var alertQueue: [QueuedAlert] = []
     private static var dismissTimer: Timer?
     private static var keyMonitor: Any?
     private static var currentSourceContext: SourceContext?
@@ -23,11 +32,52 @@ final class FullScreenAlertWindow {
         presentation: AlertPresentation = .default,
         focusSourceOnDismiss: Bool = true
     ) {
-        dismiss()
+        if !managed.isEmpty || !alertQueue.isEmpty {
+            alertQueue.append(
+                QueuedAlert(
+                    notification: notification,
+                    displayMode: displayMode,
+                    dismissKey: dismissKey,
+                    presentation: presentation,
+                    focusSourceOnDismiss: focusSourceOnDismiss
+                )
+            )
+            AppLog.shared.info(
+                "alert queued (depth=\(alertQueue.count, privacy: .public)): title=\(notification.title, privacy: .public)"
+            )
+            return
+        }
+        showNow(
+            notification: notification,
+            displayMode: displayMode,
+            dismissKey: dismissKey,
+            presentation: presentation,
+            focusSourceOnDismiss: focusSourceOnDismiss
+        )
+    }
+
+    private static func stripDetachedMonitors() {
+        dismissTimer?.invalidate()
+        dismissTimer = nil
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
+    }
+
+    private static func showNow(
+        notification: NotificationRecord,
+        displayMode: AlertDisplayMode,
+        dismissKey: DismissKeyShortcut?,
+        presentation: AlertPresentation,
+        focusSourceOnDismiss: Bool
+    ) {
+        stripDetachedMonitors()
 
         let screens = screens(for: presentation.screens)
         guard !screens.isEmpty else {
             AppLog.shared.notice("alert show skipped — no screens available for mode=\(String(describing: presentation.screens), privacy: .public)")
+            DispatchQueue.main.async { processQueueIfNeeded() }
             return
         }
 
@@ -99,6 +149,18 @@ final class FullScreenAlertWindow {
                 return event
             }
         }
+    }
+
+    private static func processQueueIfNeeded() {
+        guard managed.isEmpty, let next = alertQueue.first else { return }
+        alertQueue.removeFirst()
+        showNow(
+            notification: next.notification,
+            displayMode: next.displayMode,
+            dismissKey: next.dismissKey,
+            presentation: next.presentation,
+            focusSourceOnDismiss: next.focusSourceOnDismiss
+        )
     }
 
     private static func screens(for mode: AlertScreens) -> [NSScreen] {
@@ -180,6 +242,7 @@ final class FullScreenAlertWindow {
         // Grab and clear source context before closing windows
         let sourceCtx = currentSourceContext
         currentSourceContext = nil
+        let willPresentQueued = !alertQueue.isEmpty
 
         for m in copies {
             if m.layout == .banner {
@@ -197,10 +260,14 @@ final class FullScreenAlertWindow {
             }
         }
 
-        // Focus source after windows are dismissed
-        if shouldFocusSourceOnDismiss, let ctx = sourceCtx {
+        // Focus source only when nothing else is queued (avoid stealing focus before the next alert)
+        if shouldFocusSourceOnDismiss, let ctx = sourceCtx, !willPresentQueued {
             focusSource(ctx)
         }
         shouldFocusSourceOnDismiss = true
+
+        DispatchQueue.main.async {
+            processQueueIfNeeded()
+        }
     }
 }

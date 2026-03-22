@@ -2,13 +2,16 @@ import Foundation
 
 enum MatchOperator: String, Codable, CaseIterable, Equatable {
     case contains = "contains"
-    case regex = "regex"
+    case startsWith = "starts_with"
     case equals = "equals"
+    case regex = "regex"
 
     func matches(_ haystack: String, _ needle: String) -> Bool {
         switch self {
         case .contains:
             return haystack.localizedCaseInsensitiveContains(needle)
+        case .startsWith:
+            return haystack.range(of: needle, options: [.anchored, .caseInsensitive], range: nil, locale: .current) != nil
         case .equals:
             return haystack.caseInsensitiveCompare(needle) == .orderedSame
         case .regex:
@@ -41,6 +44,7 @@ enum AlertDisplayMode: Codable, Equatable {
 struct FilterRule: Identifiable, Codable, Equatable {
     let id: UUID
     var appIdentifier: String  // empty = match any app
+    var appOperator: MatchOperator
     var titleContains: String  // empty = match any title
     var titleOperator: MatchOperator
     var bodyContains: String   // empty = match any body
@@ -50,9 +54,10 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var displayMode: AlertDisplayMode
     var focusSourceOnDismiss: Bool
 
-    init(id: UUID = UUID(), appIdentifier: String = "", titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
+    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
         self.id = id
         self.appIdentifier = appIdentifier
+        self.appOperator = appOperator
         self.titleContains = titleContains
         self.titleOperator = titleOperator
         self.bodyContains = bodyContains
@@ -67,6 +72,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         appIdentifier = try c.decode(String.self, forKey: .appIdentifier)
+        appOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .appOperator) ?? .contains
         titleContains = try c.decode(String.self, forKey: .titleContains)
         titleOperator = try c.decode(MatchOperator.self, forKey: .titleOperator)
         bodyContains = try c.decode(String.self, forKey: .bodyContains)
@@ -87,5 +93,19 @@ struct FilterRule: Identifiable, Codable, Equatable {
         let t = titleContains.isEmpty ? "Preview: matched title" : titleContains
         let b = bodyContains.isEmpty ? "This is sample body text for your rule preview." : bodyContains
         return NotificationRecord(id: -42, appIdentifier: app, title: t, body: b, deliveredDate: Date())
+    }
+
+    /// AND logic for non-empty filter fields. Does not check `isEnabled` or `isValid` (for previews).
+    func matchesFields(of notification: NotificationRecord) -> Bool {
+        if !appIdentifier.isEmpty {
+            guard appOperator.matches(notification.appIdentifier, appIdentifier) else { return false }
+        }
+        if !titleContains.isEmpty {
+            guard titleOperator.matches(notification.title, titleContains) else { return false }
+        }
+        if !bodyContains.isEmpty {
+            guard bodyOperator.matches(notification.body, bodyContains) else { return false }
+        }
+        return true
     }
 }

@@ -2,24 +2,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Settings sidebar / General tab scroll targets
-
-enum SettingsGeneralSection: Hashable {
-    case alerts
-    case application
-    case keyboard
-    case login
-
-    var title: String {
-        switch self {
-        case .alerts: return "Alerts"
-        case .application: return "Application"
-        case .keyboard: return "Keyboard"
-        case .login: return "Login"
-        }
-    }
-}
-
 // MARK: - Settings View (sidebar + detail, Xcode-style)
 
 private enum SettingsChromeLayout {
@@ -38,18 +20,17 @@ struct SettingsView: View {
     let onTestRule: (FilterRule) -> Void
 
     @State private var selectedSidebarItem: SettingsSidebarItem = .rulesActive
-    @Environment(\.colorScheme) private var colorScheme
 
     enum SettingsSidebarItem: Hashable {
         case rulesActive
         case unmatched
-        case general(SettingsGeneralSection)
+        case settings
 
         var detailTitle: String {
             switch self {
             case .rulesActive: return "Active"
             case .unmatched: return "Unmatched"
-            case .general(let section): return section.title
+            case .settings: return "Settings"
             }
         }
     }
@@ -106,7 +87,7 @@ struct SettingsView: View {
             NavigationSplitView {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        SettingsSidebarGroup(title: "Rules", colorScheme: colorScheme) {
+                        SettingsSidebarGroup(title: "Rules") {
                             settingsSidebarRow(
                                 title: "Active",
                                 systemImage: "checkmark.circle",
@@ -118,26 +99,12 @@ struct SettingsView: View {
                                 item: .unmatched
                             )
                         }
-                        SettingsSidebarGroup(title: "Settings", colorScheme: colorScheme) {
+
+                        SettingsSidebarGroup(title: "Settings") {
                             settingsSidebarRow(
-                                title: SettingsGeneralSection.alerts.title,
-                                systemImage: "bell.badge",
-                                item: .general(.alerts)
-                            )
-                            settingsSidebarRow(
-                                title: SettingsGeneralSection.application.title,
-                                systemImage: "app",
-                                item: .general(.application)
-                            )
-                            settingsSidebarRow(
-                                title: SettingsGeneralSection.keyboard.title,
-                                systemImage: "keyboard",
-                                item: .general(.keyboard)
-                            )
-                            settingsSidebarRow(
-                                title: SettingsGeneralSection.login.title,
-                                systemImage: "power",
-                                item: .general(.login)
+                                title: "Settings",
+                                systemImage: "gearshape",
+                                item: .settings
                             )
                         }
                     }
@@ -154,8 +121,8 @@ struct SettingsView: View {
                             RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
                         case .unmatched:
                             UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
-                        case .general(let section):
-                            GeneralTab(appSettings: appSettings, scrollFocus: section)
+                        case .settings:
+                            SettingsTab(appSettings: appSettings)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -200,7 +167,6 @@ struct SettingsView: View {
 
 private struct SettingsSidebarGroup<Content: View>: View {
     let title: String
-    var colorScheme: ColorScheme
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -217,20 +183,26 @@ private struct SettingsSidebarGroup<Content: View>: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(sidebarBoxFill)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08), lineWidth: 1)
-                }
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.42))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.primary.opacity(0.045), location: 0),
+                                .init(color: Color.clear, location: 0.5)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.65), lineWidth: 0.5)
+            }
         }
-    }
-
-    private var sidebarBoxFill: Color {
-        if colorScheme == .dark {
-            return Color(white: 0.11)
-        }
-        return Color(nsColor: .controlBackgroundColor)
     }
 }
 
@@ -510,68 +482,68 @@ struct RulesTab: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar: label filter + add button
-            HStack(spacing: 10) {
-                // Label filter chips
-                if !allLabels.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            LabelChip(label: "All", isSelected: selectedLabel == nil) {
-                                selectedLabel = nil
-                            }
-                            ForEach(allLabels, id: \.self) { label in
-                                LabelChip(label: label, isSelected: selectedLabel == label) {
-                                    selectedLabel = selectedLabel == label ? nil : label
+            SettingsDetailSectionCard(title: "Library") {
+                HStack(spacing: 10) {
+                    if !allLabels.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                LabelChip(label: "All", isSelected: selectedLabel == nil) {
+                                    selectedLabel = nil
+                                }
+                                ForEach(allLabels, id: \.self) { label in
+                                    LabelChip(label: label, isSelected: selectedLabel == label) {
+                                        selectedLabel = selectedLabel == label ? nil : label
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Spacer()
+                    Spacer()
 
-                Button(action: exportRules) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 11))
-                        Text("Export")
-                            .font(.system(size: 12, weight: .medium))
+                    Button(action: exportRules) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 11))
+                            Text("Export")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                Button(action: importRules) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.system(size: 11))
-                        Text("Import")
-                            .font(.system(size: 12, weight: .medium))
+                    Button(action: importRules) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.down")
+                                .font(.system(size: 11))
+                            Text("Import")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                Button(action: addRule) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Add Rule")
-                            .font(.system(size: 12, weight: .medium))
+                    Button(action: addRule) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Add Rule")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
             .padding(.vertical, 12)
@@ -770,6 +742,47 @@ struct LabelChip: View {
     }
 }
 
+// MARK: - Settings detail section chrome (Rules, Unmatched, settings pane, rule editor, etc.)
+
+private struct SettingsDetailSectionCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.42))
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.primary.opacity(0.045), location: 0),
+                                .init(color: Color.clear, location: 0.5)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.65), lineWidth: 0.5)
+        )
+    }
+}
+
 // MARK: - Rule Card
 
 struct RuleCard: View {
@@ -783,6 +796,7 @@ struct RuleCard: View {
     let onTestRule: () -> Void
 
     @State private var showingMatches = false
+    @State private var historyPreviewExpanded = false
 
     private var matchedEntries: [HistoryEntry] {
         history.matchedEntries(for: rule.id)
@@ -902,43 +916,68 @@ struct RuleCard: View {
                 Divider()
                     .padding(.horizontal, 14)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SuggestingField("App ID:", text: $rule.appIdentifier, placeholder: "e.g. com.apple.mail or slack", history: history, field: .appIdentifier)
-                    SuggestingField("Title:", text: $rule.titleContains, placeholder: "e.g. urgent", history: history, field: .title, suggestionLeadingInset: 186) {
-                        Picker("", selection: $rule.titleOperator) {
-                            ForEach(MatchOperator.allCases, id: \.self) { op in
-                                Text(op.rawValue).tag(op)
+                VStack(alignment: .leading, spacing: 16) {
+                    SettingsDetailSectionCard(title: "Match") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SuggestingField("App ID:", text: $rule.appIdentifier, placeholder: "e.g. com.apple.mail or slack", history: history, field: .appIdentifier, suggestionLeadingInset: 216) {
+                                Picker("", selection: $rule.appOperator) {
+                                    ForEach(MatchOperator.allCases, id: \.self) { op in
+                                        Text(op.rawValue).tag(op)
+                                    }
+                                }
+                                .frame(width: 120)
+                            }
+                            SuggestingField("Title:", text: $rule.titleContains, placeholder: "e.g. urgent", history: history, field: .title, suggestionLeadingInset: 216) {
+                                Picker("", selection: $rule.titleOperator) {
+                                    ForEach(MatchOperator.allCases, id: \.self) { op in
+                                        Text(op.rawValue).tag(op)
+                                    }
+                                }
+                                .frame(width: 120)
+                            }
+                            SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body, suggestionLeadingInset: 216) {
+                                Picker("", selection: $rule.bodyOperator) {
+                                    ForEach(MatchOperator.allCases, id: \.self) { op in
+                                        Text(op.rawValue).tag(op)
+                                    }
+                                }
+                                .frame(width: 120)
                             }
                         }
-                        .frame(width: 90)
                     }
-                    SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body, suggestionLeadingInset: 186) {
-                        Picker("", selection: $rule.bodyOperator) {
-                            ForEach(MatchOperator.allCases, id: \.self) { op in
-                                Text(op.rawValue).tag(op)
+
+                    SettingsDetailSectionCard(title: "Alert") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            LabelSuggestingField(text: $rule.label, allLabels: allLabels)
+
+                            DisplayModePicker(displayMode: $rule.displayMode)
+
+                            HStack {
+                                Text("On dismiss:")
+                                    .frame(width: 80, alignment: .trailing)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                Picker("", selection: $rule.focusSourceOnDismiss) {
+                                    Text("Focus source").tag(true)
+                                    Text("Nothing").tag(false)
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 180)
                             }
                         }
-                        .frame(width: 90)
                     }
 
-                    LabelSuggestingField(text: $rule.label, allLabels: allLabels)
-
-                    DisplayModePicker(displayMode: $rule.displayMode)
-
-                    HStack {
-                        Text("On dismiss:")
-                            .frame(width: 80, alignment: .trailing)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-
-                        Picker("", selection: $rule.focusSourceOnDismiss) {
-                            Text("Focus source").tag(true)
-                            Text("Nothing").tag(false)
+                    if rule.isValid {
+                        SettingsDetailSectionCard(title: "") {
+                            ruleHistoryPreviewDisclosure
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 180)
                     }
+                }
+                .padding(14)
 
+                VStack(spacing: 0) {
+                    Divider()
                     HStack {
                         Button("Test this rule") {
                             onTestRule()
@@ -952,8 +991,10 @@ struct RuleCard: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
-                .padding(14)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.38))
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -966,10 +1007,81 @@ struct RuleCard: View {
 
     private var ruleSummary: String {
         var parts: [String] = []
-        if !rule.appIdentifier.isEmpty { parts.append("app: \(rule.appIdentifier)") }
+        if !rule.appIdentifier.isEmpty { parts.append("app \(rule.appOperator.rawValue) \"\(rule.appIdentifier)\"") }
         if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.rawValue) \"\(rule.titleContains)\"") }
         if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.rawValue) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
+    }
+
+    /// History entries that would match the current filter fields (same AND logic as the engine).
+    private var historyPreviewMatches: [HistoryEntry] {
+        history.entries
+            .filter { entry in
+                let n = NotificationRecord(id: 0, appIdentifier: entry.appIdentifier, title: entry.title, body: entry.body, deliveredDate: entry.date)
+                return rule.matchesFields(of: n)
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    @ViewBuilder
+    private var ruleHistoryPreviewDisclosure: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                historyPreviewExpanded.toggle()
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: historyPreviewExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12, alignment: .center)
+
+                    Text("Matches in history")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text("\(historyPreviewMatches.count) in last \(NotificationHistory.storedEntryLimit)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(historyPreviewExpanded ? "Hide history matches" : "Show history matches")
+
+            if historyPreviewExpanded {
+                ruleHistoryPreviewInner
+                    .padding(.top, 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ruleHistoryPreviewInner: some View {
+        if historyPreviewMatches.isEmpty {
+            Text("Nothing in your saved history matches these filters yet. New notifications will match if they fit.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(historyPreviewMatches.prefix(12))) { entry in
+                        MatchedNotificationRow(entry: entry)
+                    }
+                }
+            }
+            .frame(maxHeight: 220)
+
+            if historyPreviewMatches.count > 12 {
+                Text("+ \(historyPreviewMatches.count - 12) more")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1057,9 +1169,11 @@ struct UnmatchedTab: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: 1) {
-                    ForEach(unmatchedEntries) { entry in
-                        UnmatchedRow(entry: entry, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+                SettingsDetailSectionCard(title: "Unmatched notifications") {
+                    LazyVStack(spacing: 8) {
+                        ForEach(unmatchedEntries) { entry in
+                            UnmatchedRow(entry: entry, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+                        }
                     }
                 }
                 .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
@@ -1151,70 +1265,78 @@ struct QuickRuleCreator: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Create Rule")
                 .font(.system(size: 13, weight: .semibold))
 
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle(isOn: $useApp) {
-                    HStack {
-                        Text("App:")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 40, alignment: .trailing)
-                        Text(entry.appIdentifier)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .toggleStyle(.checkbox)
-
-                if !entry.title.isEmpty {
-                    Toggle(isOn: $useTitle) {
+            SettingsDetailSectionCard(title: "Match") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(isOn: $useApp) {
                         HStack {
-                            Text("Title:")
+                            Text("App:")
                                 .font(.system(size: 12, weight: .medium))
                                 .frame(width: 40, alignment: .trailing)
-                            Text(entry.title)
+                            Text(entry.appIdentifier)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     }
                     .toggleStyle(.checkbox)
-                }
 
-                if !entry.body.isEmpty {
-                    Toggle(isOn: $useBody) {
-                        HStack {
-                            Text("Body:")
-                                .font(.system(size: 12, weight: .medium))
-                                .frame(width: 40, alignment: .trailing)
-                            Text(entry.body)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                    if !entry.title.isEmpty {
+                        Toggle(isOn: $useTitle) {
+                            HStack {
+                                Text("Title:")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .frame(width: 40, alignment: .trailing)
+                                Text(entry.title)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
+                        .toggleStyle(.checkbox)
                     }
-                    .toggleStyle(.checkbox)
+
+                    if !entry.body.isEmpty {
+                        Toggle(isOn: $useBody) {
+                            HStack {
+                                Text("Body:")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .frame(width: 40, alignment: .trailing)
+                                Text(entry.body)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
                 }
             }
 
-            LabelSuggestingField(text: $label, allLabels: allLabels)
+            SettingsDetailSectionCard(title: "Label") {
+                LabelSuggestingField(text: $label, allLabels: allLabels)
+            }
 
-            HStack {
-                Spacer()
-                Button("Cancel") { onDismiss() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                Button("Create") { createRule() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(!useApp && !useTitle && !useBody)
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Spacer()
+                    Button("Cancel") { onDismiss() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    Button("Create") { createRule() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(!useApp && !useTitle && !useBody)
+                }
+                .padding(.top, 10)
             }
         }
         .padding(14)
-        .frame(width: 320)
+        .frame(width: 340)
     }
 
     private func createRule() {
@@ -1239,7 +1361,7 @@ struct SuggestingField<LabelAccessory: View>: View {
     let placeholder: String
     @ObservedObject var history: NotificationHistory
     let field: SuggestionField
-    /// Leading inset so suggestion popovers align with the text field (label 80 + spacing 8 = 88; + picker 90 + spacing 8 = 186).
+    /// Leading inset so suggestion popovers align with the text field (label 80 + spacing 8 + picker 120 + spacing 8 = 216).
     let suggestionLeadingInset: CGFloat
     @ViewBuilder let labelAccessory: () -> LabelAccessory
 
@@ -1414,46 +1536,10 @@ struct NotificationPreview: View {
     }
 }
 
-// MARK: - General tab chrome (Preferences-style sections)
+// MARK: - Settings Tab (app preferences)
 
-private struct SettingsSectionCaps: View {
-    let title: String
-
-    var body: some View {
-        Text(title.uppercased())
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-            .tracking(0.55)
-            .padding(.leading, 2)
-            .padding(.bottom, 6)
-    }
-}
-
-private struct SettingsInsetGroup<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            content()
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 1)
-        }
-    }
-}
-
-// MARK: - General Tab
-
-struct GeneralTab: View {
+struct SettingsTab: View {
     @ObservedObject var appSettings: AppSettings
-    var scrollFocus: SettingsGeneralSection
     @State private var showingServiceStatus = false
     @State private var serviceStatusMessage = ""
 
@@ -1505,154 +1591,119 @@ struct GeneralTab: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        SettingsSectionCaps(title: "Alerts")
-                        SettingsInsetGroup {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Layout & screens")
-                                    .font(.system(size: 13, weight: .medium))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                SettingsDetailSectionCard(title: "Alerts") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Layout & screens")
+                            .font(.system(size: 13, weight: .medium))
 
-                                Picker("Alert layout", selection: layoutBinding) {
-                                    ForEach(AlertLayout.allCases) { mode in
-                                        Text(mode.displayName).tag(mode)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-
-                                Picker("Screens", selection: screensBinding) {
-                                    ForEach(AlertScreens.allCases) { mode in
-                                        Text(mode.displayName).tag(mode)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.radioGroup)
+                        Picker("Alert layout", selection: layoutBinding) {
+                            ForEach(AlertLayout.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
                             }
                         }
-                    }
-                    .id(SettingsGeneralSection.alerts)
+                        .pickerStyle(.segmented)
 
-                    VStack(alignment: .leading, spacing: 0) {
-                        SettingsSectionCaps(title: "Application")
-                        SettingsInsetGroup {
-                            HStack(alignment: .top, spacing: 12) {
-                                Toggle("", isOn: $appSettings.showInDock)
-                                    .labelsHidden()
-                                    .toggleStyle(.checkbox)
-                                    .accessibilityLabel("Show icon in Dock")
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Show icon in Dock")
-                                        .font(.system(size: 13))
-                                    Text("Off keeps Lumesent as a menu bar–only app.")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(captionColor)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .onChange(of: appSettings.showInDock) { _, _ in
-                                appSettings.save()
+                        Picker("Screens", selection: screensBinding) {
+                            ForEach(AlertScreens.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
                             }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.radioGroup)
                     }
-                    .id(SettingsGeneralSection.application)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        SettingsSectionCaps(title: "Keyboard")
-                        SettingsInsetGroup {
-                            VStack(alignment: .leading, spacing: 14) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Dismiss alerts")
-                                        .font(.system(size: 13, weight: .medium))
-                                    Text("Shortcut to dismiss the full-screen alert. Clicking still works.")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(captionColor)
-                                        .fixedSize(horizontal: false, vertical: true)
-
-                                    HStack(spacing: 12) {
-                                        KeyCaptureButton(shortcut: $appSettings.dismissKey)
-
-                                        if appSettings.dismissKey != nil {
-                                            Button("Clear") {
-                                                appSettings.dismissKey = nil
-                                                appSettings.save()
-                                            }
-                                            .buttonStyle(.bordered)
-                                            .controlSize(.small)
-                                        }
-                                    }
-                                }
-
-                                Divider()
-                                    .opacity(0.45)
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Open this window")
-                                        .font(.system(size: 13, weight: .medium))
-                                    Text("Global shortcut from any app. Uses the same Accessibility permission as notification detection.")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(captionColor)
-                                        .fixedSize(horizontal: false, vertical: true)
-
-                                    HStack(spacing: 12) {
-                                        KeyCaptureButton(shortcut: $appSettings.openSettingsHotkey)
-
-                                        if appSettings.openSettingsHotkey != nil {
-                                            Button("Clear") {
-                                                appSettings.openSettingsHotkey = nil
-                                                appSettings.save()
-                                            }
-                                            .buttonStyle(.bordered)
-                                            .controlSize(.small)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .id(SettingsGeneralSection.keyboard)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        SettingsSectionCaps(title: "Login")
-                        SettingsInsetGroup {
-                            HStack(alignment: .top, spacing: 12) {
-                                Toggle("", isOn: loginServiceToggleBinding)
-                                    .labelsHidden()
-                                    .toggleStyle(.checkbox)
-                                    .accessibilityLabel("Start at Login")
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Start at Login")
-                                        .font(.system(size: 13))
-                                    Text("Runs as a background service with crash recovery.")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(captionColor)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
-                    .id(SettingsGeneralSection.login)
                 }
-                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
-                .padding(.top, 20)
-                .padding(.bottom, SettingsChromeLayout.detailContentHorizontalPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .onChange(of: scrollFocus) { _, newSection in
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    proxy.scrollTo(newSection, anchor: .top)
+
+                SettingsDetailSectionCard(title: "Application") {
+                    HStack(alignment: .top, spacing: 12) {
+                        Toggle("", isOn: $appSettings.showInDock)
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            .accessibilityLabel("Show icon in Dock")
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show icon in Dock")
+                                .font(.system(size: 13))
+                            Text("Off keeps Lumesent as a menu bar–only app.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(captionColor)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .onChange(of: appSettings.showInDock) { _, _ in
+                        appSettings.save()
+                    }
+                }
+
+                SettingsDetailSectionCard(title: "Dismiss alerts") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Shortcut to dismiss the full-screen alert. Clicking still works.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 12) {
+                            KeyCaptureButton(shortcut: $appSettings.dismissKey)
+
+                            if appSettings.dismissKey != nil {
+                                Button("Clear") {
+                                    appSettings.dismissKey = nil
+                                    appSettings.save()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+
+                SettingsDetailSectionCard(title: "Open this window") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Global shortcut from any app. Uses the same Accessibility permission as notification detection.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 12) {
+                            KeyCaptureButton(shortcut: $appSettings.openSettingsHotkey)
+
+                            if appSettings.openSettingsHotkey != nil {
+                                Button("Clear") {
+                                    appSettings.openSettingsHotkey = nil
+                                    appSettings.save()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+
+                SettingsDetailSectionCard(title: "Login") {
+                    HStack(alignment: .top, spacing: 12) {
+                        Toggle("", isOn: loginServiceToggleBinding)
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            .accessibilityLabel("Start at Login")
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Start at Login")
+                                .font(.system(size: 13))
+                            Text("Runs as a background service with crash recovery.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(captionColor)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
-            .onAppear {
-                DispatchQueue.main.async {
-                    proxy.scrollTo(scrollFocus, anchor: .top)
-                }
-            }
+            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+            .padding(.top, 20)
+            .padding(.bottom, SettingsChromeLayout.detailContentHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onChange(of: appSettings.dismissKey) { _, _ in
             appSettings.save()
         }

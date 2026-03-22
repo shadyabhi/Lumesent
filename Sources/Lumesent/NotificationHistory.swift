@@ -14,7 +14,9 @@ struct HistoryEntry: Codable, Identifiable {
 class NotificationHistory: ObservableObject {
     @Published private(set) var entries: [HistoryEntry] = []
 
-    private static let maxEntries = 1000
+    /// How many entries are retained on disk (UI may reference this in copy).
+    static let storedEntryLimit = 1000
+    private static let maxEntries = storedEntryLimit
     private let fileURL: URL
 
     init() {
