@@ -1,0 +1,40 @@
+name: Certificate Expiry Check
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9am UTC
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  check-cert:
+    runs-on: macos-14
+    steps:
+      - name: Check certificate expiry
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$CERTIFICATE_P12" ]; then
+            echo "ERROR: CERTIFICATE_P12 secret is not set."
+            exit 1
+          fi
+
+          # Decode and extract expiry date
+          CERT_FILE=$(mktemp)
+          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_FILE"
+
+          EXPIRY=$(openssl pkcs12 -in "$CERT_FILE" -passin "pass:$CERTIFICATE_PASSWORD" -nokeys -clcerts 2>/dev/null \
+            | openssl x509 -noout -enddate | cut -d= -f2)
+          rm -f "$CERT_FILE"
+
+          EXPIRY_EPOCH=$(date -jf "%b %d %T %Y %Z" "$EXPIRY" +%s)
+          NOW_EPOCH=$(date +%s)
+          DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
+
+          echo "Certificate expires: $EXPIRY"
+          echo "Days remaining: $DAYS_LEFT"
+
+          if [ "$DAYS_LEFT" -le 30 ]; then
+            echo "::error::Certificate expires in $DAYS_LEFT days! Renew now."
+            exit 1
+          fi
