@@ -1,0 +1,82 @@
+name: Nightly
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import code signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$CERTIFICATE_P12" ]; then
+            echo "ERROR: CERTIFICATE_P12 secret is not set."
+            exit 1
+          fi
+
+          CERT_FILE=$(mktemp)
+          echo "$CERTIFICATE_P12" | base64 --decode > "$CERT_FILE"
+
+          KEYCHAIN="build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security list-keychains -s "$KEYCHAIN" login.keychain-db
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
+
+          security import "$CERT_FILE" \
+            -k "$KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -f pkcs12
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm -f "$CERT_FILE"
+
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning
+
+      - name: Build signed DMG
+        env:
+          VERSION: nightly
+        run: |
+          make dmg
+          echo "── codesign verification ──"
+          codesign --verify --deep --strict --verbose=2 Lumesent.app
+
+      - name: Update nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DMG_FILE="Lumesent-nightly.dmg"
+
+          if [ ! -f "$DMG_FILE" ]; then
+            echo "ERROR: $DMG_FILE not found"
+            ls -la *.dmg 2>/dev/null || echo "No DMG files found"
+            exit 1
+          fi
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TITLE="Lumesent Nightly (${SHORT_SHA})"
+          NOTES="Built from \`main\` at ${GITHUB_SHA}
+
+          Commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+          # Delete existing nightly release (if any), then recreate
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly \
+            "$DMG_FILE" \
+            --title "$TITLE" \
+            --notes "$NOTES" \
+            --prerelease
