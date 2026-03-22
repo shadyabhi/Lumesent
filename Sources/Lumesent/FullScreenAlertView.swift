@@ -8,7 +8,7 @@ struct AlertGridView: View {
     let onDismissAll: () -> Void
 
     private var cardWidth: CGFloat { layout == .banner ? 340 : 400 }
-    private var cardHeight: CGFloat { layout == .banner ? 200 : 280 }
+    private var cardMinHeight: CGFloat { layout == .banner ? 200 : 280 }
     private var maxColumns: Int { layout == .banner ? 2 : 3 }
 
     var body: some View {
@@ -33,7 +33,8 @@ struct AlertGridView: View {
                         layout: layout,
                         onDismiss: { onDismissCard(card.id) }
                     )
-                    .frame(width: cardWidth, height: cardHeight)
+                    .frame(idealWidth: cardWidth, minHeight: cardMinHeight)
+                    .frame(width: cardWidth)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.8).combined(with: .opacity),
                         removal: .scale(scale: 0.9).combined(with: .opacity)
@@ -91,14 +92,12 @@ struct AlertCardView: View {
                 .font(.system(size: titleSize, weight: .bold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
 
             if !card.notification.body.isEmpty {
                 Text(card.notification.body)
                     .font(.system(size: bodySize))
                     .foregroundStyle(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
-                    .lineLimit(3)
             }
 
             Button("Dismiss") { onDismiss() }
