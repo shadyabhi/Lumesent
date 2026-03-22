@@ -28,7 +28,6 @@ struct NSEventShim {
 class AppSettings: ObservableObject {
     @Published var dismissKey: DismissKeyShortcut?
     @Published var showInDock: Bool = false
-    @Published var openSettingsHotkey: DismissKeyShortcut?
     @Published var alertPresentation: AlertPresentation = .default
     /// When non-nil and in the future, matched alerts are suppressed.
     @Published var pauseAlertsUntil: Date?
@@ -50,7 +49,6 @@ class AppSettings: ObservableObject {
             let data = try JSONEncoder().encode(SettingsData(
                 dismissKey: dismissKey,
                 showInDock: showInDock,
-                openSettingsHotkey: openSettingsHotkey,
                 alertPresentation: alertPresentation,
                 pauseAlertsUntil: pauseAlertsUntil
             ))
@@ -71,7 +69,6 @@ class AppSettings: ObservableObject {
         }
         dismissKey = decoded.dismissKey
         showInDock = decoded.showInDock
-        openSettingsHotkey = decoded.openSettingsHotkey
         alertPresentation = decoded.alertPresentation
         pauseAlertsUntil = decoded.pauseAlertsUntil
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
@@ -80,7 +77,6 @@ class AppSettings: ObservableObject {
     private struct SettingsData: Codable {
         var dismissKey: DismissKeyShortcut?
         var showInDock: Bool = false
-        var openSettingsHotkey: DismissKeyShortcut?
         var alertPresentation: AlertPresentation = .default
         var pauseAlertsUntil: Date?
     }

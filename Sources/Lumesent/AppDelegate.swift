@@ -20,7 +20,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var onboardingWindow: NSWindow?
     private var permissionObservation: Any?
     private var cancellables = Set<AnyCancellable>()
-    private var globalSettingsHotkeyMonitor: Any?
     private var iconFlashTimer: Timer?
 
     private var dedupKey: String?
@@ -40,12 +39,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         permissionObservation = permissionChecker.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateMenuBarIcon() }
         }
-
-        permissionChecker.$hasAccessibility
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.registerGlobalSettingsHotkey() }
-            .store(in: &cancellables)
 
         Publishers.CombineLatest(permissionChecker.$hasFullDiskAccess, permissionChecker.$hasAccessibility)
             .removeDuplicates { $0 == $1 }
@@ -80,19 +73,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             }
             .store(in: &cancellables)
 
-        appSettings.$openSettingsHotkey
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.registerGlobalSettingsHotkey()
-            }
-            .store(in: &cancellables)
-
         appSettings.$alertPresentation
             .dropFirst()
             .sink { [weak self] _ in self?.appSettings.save() }
             .store(in: &cancellables)
 
-        registerGlobalSettingsHotkey()
         updateMenuBarIcon()
 
         AppLog.shared.info("app startup complete — FDA=\(self.permissionChecker.hasFullDiskAccess, privacy: .public) AX=\(self.permissionChecker.hasAccessibility, privacy: .public) paused=\(self.appSettings.isPauseActive, privacy: .public)")
@@ -139,20 +124,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let level: NSWindow.Level = permissionChecker.allGranted ? .normal : .floating
         settingsWindow?.level = level
         onboardingWindow?.level = level
-    }
-
-    private func registerGlobalSettingsHotkey() {
-        if let monitor = globalSettingsHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            globalSettingsHotkeyMonitor = nil
-        }
-        let axOpts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): false] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(axOpts) else { return }
-        guard let shortcut = appSettings.openSettingsHotkey else { return }
-        globalSettingsHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard shortcut.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) else { return }
-            DispatchQueue.main.async { self?.openSettings() }
-        }
     }
 
     private func presentOnboardingIfNeeded() {
