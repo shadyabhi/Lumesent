@@ -18,6 +18,8 @@
     <true/>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Lumesent uses the Accessibility API to detect new notifications in real time and to register global keyboard shortcuts.</string>
     <key>NSUserNotificationsUsageDescription</key>
     <string>Lumesent can mirror alerts to Notification Center so you can review them later.</string>
     <key>SUFeedURL</key>

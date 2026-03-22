@@ -38,6 +38,7 @@ struct OnboardingView: View {
                 Button("Skip") { finish() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
+                    .accessibilityHint("Skip onboarding and go to the app")
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -88,6 +89,7 @@ struct OnboardingView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(Color.accentColor)
                 .padding(.top, 8)
+                .accessibilityHidden(true)
             Text(p.title)
                 .font(.title3.bold())
                 .multilineTextAlignment(.center)
@@ -126,6 +128,7 @@ private struct PermissionMiniBanner: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundStyle(.orange)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Permissions still needed")
                     .font(.system(size: 11, weight: .semibold))

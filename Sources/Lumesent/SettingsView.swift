@@ -122,7 +122,7 @@ struct SettingsView: View {
                         case .unmatched:
                             UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
                         case .settings:
-                            SettingsTab(appSettings: appSettings)
+                            SettingsTab(appSettings: appSettings, history: history)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -849,6 +849,7 @@ struct RuleCard: View {
                                 }
                                 .buttonStyle(.plain)
                                 .help("Show matched notifications")
+                                .accessibilityLabel("\(matchedEntries.count) matched notifications")
                             }
                         }
 
@@ -870,6 +871,8 @@ struct RuleCard: View {
                 .onTapGesture {
                     onToggleEdit()
                 }
+                .accessibilityLabel(isEditing ? "Collapse rule" : "Expand rule")
+                .accessibilityAddTraits(.isButton)
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -877,6 +880,7 @@ struct RuleCard: View {
                         .foregroundStyle(.red.opacity(0.7))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Delete rule")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -1230,6 +1234,7 @@ struct UnmatchedRow: View {
             }
             .buttonStyle(.plain)
             .help("Create rule from this notification")
+            .accessibilityLabel("Create rule from this notification")
             .popover(isPresented: $showingCreateRule, arrowEdge: .trailing) {
                 QuickRuleCreator(entry: entry, ruleStore: ruleStore, onRulesChanged: onRulesChanged) {
                     showingCreateRule = false
@@ -1478,6 +1483,7 @@ struct SuggestionRow: View {
                     .font(.system(size: 10))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Preview notification details")
             .popover(isPresented: $showingPreview, arrowEdge: .trailing) {
                 NotificationPreview(entry: suggestion.entry)
             }
@@ -1540,8 +1546,10 @@ struct NotificationPreview: View {
 
 struct SettingsTab: View {
     @ObservedObject var appSettings: AppSettings
+    @ObservedObject var history: NotificationHistory
     @State private var showingServiceStatus = false
     @State private var serviceStatusMessage = ""
+    @State private var showingClearHistoryConfirmation = false
 
     /// AppKit label color: reliable on grouped controls; `.secondary` inside `Toggle` labels can render nearly invisible on macOS.
     private var captionColor: Color { Color(nsColor: .secondaryLabelColor) }
@@ -1653,6 +1661,7 @@ struct SettingsTab: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
+                                .accessibilityLabel("Clear dismiss shortcut")
                             }
                         }
                     }
@@ -1675,6 +1684,7 @@ struct SettingsTab: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
+                                .accessibilityLabel("Clear settings shortcut")
                             }
                         }
                     }
@@ -1697,6 +1707,30 @@ struct SettingsTab: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+
+                SettingsDetailSectionCard(title: "Data") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Lumesent stores the last \(NotificationHistory.storedEntryLimit) notifications locally for rule-building suggestions.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 12) {
+                            Button("Clear History") {
+                                showingClearHistoryConfirmation = true
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(history.entries.isEmpty)
+
+                            if !history.entries.isEmpty {
+                                Text("\(history.entries.count) entries")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(captionColor)
+                            }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
             .padding(.top, 20)
@@ -1717,6 +1751,14 @@ struct SettingsTab: View {
             Button("OK") {}
         } message: {
             Text(serviceStatusMessage)
+        }
+        .alert("Clear Notification History?", isPresented: $showingClearHistoryConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear All", role: .destructive) {
+                history.clearAll()
+            }
+        } message: {
+            Text("This will permanently delete all stored notification history. This cannot be undone.")
         }
     }
 }

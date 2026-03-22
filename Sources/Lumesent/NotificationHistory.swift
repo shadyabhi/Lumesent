@@ -43,6 +43,11 @@ class NotificationHistory: ObservableObject {
         save()
     }
 
+    func clearAll() {
+        entries.removeAll()
+        save()
+    }
+
     /// Most recent matched notifications (any rule), for menu previews.
     func recentMatches(count: Int) -> [HistoryEntry] {
         Array(entries.filter(\.matched).sorted { $0.date > $1.date }.prefix(count))

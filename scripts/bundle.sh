@@ -58,6 +58,7 @@ mkdir -p "$APP/Contents/Resources"
 
 cp "$BUILD_DIR/Lumesent" "$APP/Contents/MacOS/Lumesent"
 sed "s/__VERSION__/$VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
+cp "$REPO_ROOT/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/MacOS/Lumesent"
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP"

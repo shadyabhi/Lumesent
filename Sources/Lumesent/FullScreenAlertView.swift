@@ -25,6 +25,7 @@ struct FullScreenAlertView: View {
             VStack(spacing: layout == .banner ? 10 : 20) {
                 appIconView
                     .frame(width: layout == .banner ? 40 : 56, height: layout == .banner ? 40 : 56)
+                    .accessibilityHidden(true)
 
                 Text(notification.appName)
                     .font(layout == .banner ? .subheadline : .headline)
@@ -48,6 +49,8 @@ struct FullScreenAlertView: View {
                     .tint(.white)
                     .padding(.top, layout == .banner ? 4 : 10)
                     .controlSize(layout == .banner ? .small : .regular)
+                    .accessibilityLabel("Dismiss alert")
+                    .accessibilityHint("Dismiss this notification alert")
             }
             .padding(verticalPadding)
             .frame(maxWidth: maxContentWidth)
