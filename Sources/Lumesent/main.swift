@@ -18,11 +18,71 @@ if subcommand == "--help" || subcommand == "-h" {
     USAGE
       Lumesent                Launch the menu bar app
       Lumesent send [options] Send a notification to the running app
+      Lumesent logs [options] Stream or show recent app logs
 
-    Run 'Lumesent send --help' for send options.
+    Run 'Lumesent <command> --help' for command options.
     """
     print(help)
     exit(0)
+}
+
+// ── Lumesent logs ──
+if subcommand == "logs" {
+    if args.contains("--help") || args.contains("-h") {
+        let help = """
+        Show Lumesent app logs via the unified macOS log system.
+
+        USAGE
+          Lumesent logs [options]
+
+        OPTIONS
+          --follow              Stream logs in real time (like tail -f)
+          --last <duration>     How far back to show (default: 1h). Examples: 30m, 2h, 1d
+
+        EXAMPLES
+          Lumesent logs
+          Lumesent logs --follow
+          Lumesent logs --last 30m
+          Lumesent logs --follow --last 5m
+        """
+        print(help)
+        exit(0)
+    }
+
+    func flagValue(_ flag: String) -> String? {
+        guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
+        return args[idx + 1]
+    }
+
+    let last = flagValue("--last") ?? "1h"
+    let follow = args.contains("--follow")
+
+    var logArgs = [String]()
+    if follow {
+        logArgs += ["stream", "--predicate", "process == \"Lumesent\""]
+    } else {
+        logArgs += ["show", "--predicate", "process == \"Lumesent\"", "--last", last]
+    }
+
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/log")
+    task.arguments = logArgs
+    task.standardOutput = FileHandle.standardOutput
+    task.standardError = FileHandle.standardError
+
+    signal(SIGINT, SIG_IGN)
+    let sigintSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+    sigintSource.setEventHandler { task.terminate() }
+    sigintSource.resume()
+
+    do {
+        try task.run()
+        task.waitUntilExit()
+    } catch {
+        fputs("error: failed to run log command — \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
+    exit(task.terminationStatus)
 }
 
 // ── Lumesent send ──
