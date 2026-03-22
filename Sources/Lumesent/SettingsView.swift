@@ -120,7 +120,7 @@ struct SettingsView: View {
                         case .rulesActive:
                             RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
                         case .unmatched:
-                            UnmatchedTab(history: history, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+                            UnmatchedTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         case .settings:
                             SettingsTab(appSettings: appSettings, history: history)
                         }
@@ -248,12 +248,12 @@ struct PermissionOKIndicator: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
 
-                PermissionStatusRow(label: "Full Disk Access", ok: permissionChecker.hasFullDiskAccess)
-                PermissionStatusRow(label: "Accessibility", ok: permissionChecker.hasAccessibility)
-                PermissionStatusRow(label: "Notifications", ok: permissionChecker.hasNotifications)
+                PermissionStatusRow(label: "Full Disk Access", ok: permissionChecker.hasFullDiskAccess, purpose: "Read the notification database")
+                PermissionStatusRow(label: "Accessibility", ok: permissionChecker.hasAccessibility, purpose: "Real-time detection & hotkeys")
+                PermissionStatusRow(label: "Notifications", ok: permissionChecker.hasNotifications, purpose: "Send native macOS alerts")
             }
             .padding(12)
-            .frame(width: 200)
+            .frame(width: 240)
         }
     }
 }
@@ -261,14 +261,22 @@ struct PermissionOKIndicator: View {
 struct PermissionStatusRow: View {
     let label: String
     let ok: Bool
+    let purpose: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.system(size: 11))
                 .foregroundStyle(ok ? .green : .red)
-            Text(label)
-                .font(.system(size: 12))
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 12))
+                Text(purpose)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer()
         }
     }
@@ -787,6 +795,7 @@ struct RuleCard: View {
     let onSave: () -> Void
     let onTestRule: () -> Void
 
+    @State private var isHovering = false
     @State private var showingMatches = false
     @State private var historyPreviewExpanded = false
 
@@ -1004,12 +1013,13 @@ struct RuleCard: View {
                 .background(Color(nsColor: .windowBackgroundColor).opacity(0.38))
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(isHovering && !isEditing ? Color.accentColor.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                .strokeBorder(isHovering && !isEditing ? Color.accentColor.opacity(0.3) : Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
+        .onHover { hovering in isHovering = hovering }
     }
 
     private var ruleSummary: String {
@@ -1116,6 +1126,7 @@ struct RuleCard: View {
 
 struct MatchedNotificationRow: View {
     let entry: HistoryEntry
+    @State private var isHovering = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -1146,8 +1157,14 @@ struct MatchedNotificationRow: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+        .background(isHovering ? Color.accentColor.opacity(0.08) : Color(nsColor: .windowBackgroundColor).opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(isHovering ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 0.5)
+        )
+        .onHover { hovering in isHovering = hovering }
+        .contentShape(Rectangle())
     }
 }
 
@@ -1156,6 +1173,7 @@ struct MatchedNotificationRow: View {
 struct UnmatchedTab: View {
     @ObservedObject var history: NotificationHistory
     @ObservedObject var ruleStore: RuleStore
+    @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
     private var unmatchedEntries: [HistoryEntry] {
@@ -1182,7 +1200,7 @@ struct UnmatchedTab: View {
                 SettingsDetailSectionCard(title: "Unmatched notifications") {
                     LazyVStack(spacing: 8) {
                         ForEach(unmatchedEntries) { entry in
-                            UnmatchedRow(entry: entry, ruleStore: ruleStore, onRulesChanged: onRulesChanged)
+                            UnmatchedRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         }
                     }
                 }
@@ -1198,9 +1216,11 @@ struct UnmatchedTab: View {
 struct UnmatchedRow: View {
     let entry: HistoryEntry
     @ObservedObject var ruleStore: RuleStore
+    @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
     @State private var showingCreateRule = false
+    @State private var isHovering = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1249,11 +1269,31 @@ struct UnmatchedRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(isHovering ? Color.accentColor.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                .strokeBorder(isHovering ? Color.accentColor.opacity(0.3) : Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
+        .onHover { hovering in isHovering = hovering }
+        .contentShape(Rectangle())
+        .onTapGesture { previewAlert() }
+        .help("Click to preview full-screen alert")
+    }
+
+    private func previewAlert() {
+        let record = NotificationRecord(
+            id: -1,
+            appIdentifier: entry.appIdentifier,
+            title: entry.title,
+            body: entry.body,
+            deliveredDate: entry.date
+        )
+        FullScreenAlertWindow.show(
+            notification: record,
+            displayMode: .defaultTimed,
+            dismissKey: appSettings.dismissKey,
+            presentation: appSettings.alertPresentation
         )
     }
 }
