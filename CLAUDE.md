@@ -44,13 +44,11 @@ NotificationMonitor → AppDelegate.handleNewNotification → FilterEngine.match
 
 ### External Notifications
 
-CLI: `Lumesent.app/Contents/MacOS/Lumesent --send --title "…" [--body "…"] [--app-name "…"] [--display-mode sticky|timed]`
-
-Uses a Unix socket at `notify.sock`. Bypasses filter rules — always shows alert (unless paused). The `--send` path exits immediately without launching the GUI; it connects to the running instance's socket.
+AppleScript / `osascript`: `tell application "Lumesent" to send external alert "title" body text "…"` with optional labeled parameters (`application name`, `display mode` sticky|timed, `alert type` fullscreen|notification, `focus source terminal` true|false). Implemented via [`Lumesent.sdef`](Resources/Lumesent.sdef) and [`SendExternalAlertScriptCommand`](Sources/Lumesent/SendExternalAlertScriptCommand.swift). Bypasses filter rules — always shows an alert (unless paused). The calling app may need Automation permission to control Lumesent.
 
 ### UI
 
-SwiftUI views hosted in AppKit windows via `NSHostingView`. No storyboards/xibs. `main.swift` bootstraps `NSApplication` directly, handles `--send` CLI mode, and enforces single-instance via `DistributedNotificationCenter`.
+SwiftUI views hosted in AppKit windows via `NSHostingView`. No storyboards/xibs. `main.swift` bootstraps `NSApplication` directly and enforces single-instance via `DistributedNotificationCenter`.
 
 SettingsView is the largest file (~1900 lines): sidebar-based rules editor, unmatched notification history browser, and general settings.
 

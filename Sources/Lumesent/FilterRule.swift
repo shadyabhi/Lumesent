@@ -51,10 +51,11 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var bodyOperator: MatchOperator
     var isEnabled: Bool
     var label: String  // empty = no label
+    var ruleDescription: String  // empty = no description
     var displayMode: AlertDisplayMode
     var focusSourceOnDismiss: Bool
 
-    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
+    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.appOperator = appOperator
@@ -64,6 +65,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         self.bodyOperator = bodyOperator
         self.isEnabled = isEnabled
         self.label = label
+        self.ruleDescription = ruleDescription
         self.displayMode = displayMode
         self.focusSourceOnDismiss = focusSourceOnDismiss
     }
@@ -79,6 +81,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         bodyOperator = try c.decode(MatchOperator.self, forKey: .bodyOperator)
         isEnabled = try c.decode(Bool.self, forKey: .isEnabled)
         label = try c.decode(String.self, forKey: .label)
+        ruleDescription = try c.decodeIfPresent(String.self, forKey: .ruleDescription) ?? ""
         displayMode = try c.decode(AlertDisplayMode.self, forKey: .displayMode)
         focusSourceOnDismiss = try c.decodeIfPresent(Bool.self, forKey: .focusSourceOnDismiss) ?? true
     }

@@ -22,6 +22,10 @@
     <string>Lumesent uses the Accessibility API to detect new notifications in real time and to register global keyboard shortcuts.</string>
     <key>NSUserNotificationsUsageDescription</key>
     <string>Lumesent can mirror alerts to Notification Center so you can review them later.</string>
+    <key>NSAppleScriptEnabled</key>
+    <true/>
+    <key>OSAScriptingDefinition</key>
+    <string>Lumesent.sdef</string>
     <key>SUFeedURL</key>
     <string>https://example.com/lumesent/appcast.xml</string>
     <key>SUPublicEDKey</key>

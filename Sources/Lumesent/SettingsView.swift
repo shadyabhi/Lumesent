@@ -314,7 +314,7 @@ struct PermissionBanner: View {
                 if !permissionChecker.hasNotifications {
                     PermissionRow(
                         title: "Notifications",
-                        description: "Optional — allows Lumesent to send native macOS notifications via the --send --alert-type notification CLI command. Without this, only full-screen and banner alerts work.",
+                        description: "Optional — allows Lumesent to send native macOS notifications when an external script uses alert type \"notification\" (AppleScript: send external alert … alert type \"notification\"). Without this, only full-screen and banner alerts work.",
                         action: {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                         }
@@ -475,9 +475,19 @@ struct RulesTab: View {
         return labels.sorted()
     }
 
-    private var filteredRules: [FilterRule] {
-        guard let label = selectedLabel else { return ruleStore.rules }
-        return ruleStore.rules.filter { $0.label == label }
+    private var labelCounts: [String: Int] {
+        var counts: [String: Int] = [:]
+        for rule in ruleStore.rules where !rule.label.isEmpty {
+            counts[rule.label, default: 0] += 1
+        }
+        return counts
+    }
+
+    private var filteredRuleIndices: [Int] {
+        guard let label = selectedLabel else {
+            return Array(ruleStore.rules.indices)
+        }
+        return ruleStore.rules.indices.filter { ruleStore.rules[$0].label == label }
     }
 
     var body: some View {
@@ -487,11 +497,11 @@ struct RulesTab: View {
                     if !allLabels.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
-                                LabelChip(label: "All", isSelected: selectedLabel == nil) {
+                                LabelChip(label: "All", count: ruleStore.rules.count, isSelected: selectedLabel == nil) {
                                     selectedLabel = nil
                                 }
                                 ForEach(allLabels, id: \.self) { label in
-                                    LabelChip(label: label, isSelected: selectedLabel == label) {
+                                    LabelChip(label: label, count: labelCounts[label] ?? 0, isSelected: selectedLabel == label) {
                                         selectedLabel = selectedLabel == label ? nil : label
                                     }
                                 }
@@ -553,30 +563,30 @@ struct RulesTab: View {
             // Rules list
             if ruleStore.rules.isEmpty {
                 emptyState
-            } else if filteredRules.isEmpty {
+            } else if filteredRuleIndices.isEmpty {
                 VStack(spacing: 8) {
                     Text("No rules with this label")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if selectedLabel == nil {
+            } else {
                 List {
-                    ForEach($ruleStore.rules) { $rule in
+                    ForEach(filteredRuleIndices, id: \.self) { index in
                         RuleCard(
-                            rule: $rule,
-                            isEditing: editingRule?.id == $rule.wrappedValue.id,
+                            rule: $ruleStore.rules[index],
+                            isEditing: editingRule?.id == ruleStore.rules[index].id,
                             history: history,
                             allLabels: allLabels,
                             onToggleEdit: {
-                                if editingRule?.id == $rule.wrappedValue.id {
+                                if editingRule?.id == ruleStore.rules[index].id {
                                     editingRule = nil
                                 } else {
-                                    editingRule = $rule.wrappedValue
+                                    editingRule = ruleStore.rules[index]
                                 }
                             },
                             onDelete: {
-                                let id = $rule.wrappedValue.id
+                                let id = ruleStore.rules[index].id
                                 ruleStore.rules.removeAll { $0.id == id }
                                 save()
                             },
@@ -585,51 +595,20 @@ struct RulesTab: View {
                                 save()
                             },
                             onTestRule: {
-                                onTestRule($rule.wrappedValue)
+                                onTestRule(ruleStore.rules[index])
                             }
                         )
                         .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                     }
-                    .onMove { indices, newOffset in
+                    .onMove(perform: selectedLabel == nil ? { indices, newOffset in
                         ruleStore.rules.move(fromOffsets: indices, toOffset: newOffset)
                         save()
-                    }
+                    } : nil)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(filteredRules) { rule in
-                            if let index = ruleStore.rules.firstIndex(where: { $0.id == rule.id }) {
-                                RuleCard(
-                                    rule: $ruleStore.rules[index],
-                                    isEditing: editingRule?.id == rule.id,
-                                    history: history,
-                                    allLabels: allLabels,
-                                    onToggleEdit: {
-                                        editingRule = (editingRule?.id == rule.id) ? nil : rule
-                                    },
-                                    onDelete: {
-                                        ruleStore.rules.removeAll { $0.id == rule.id }
-                                        save()
-                                    },
-                                    onSave: {
-                                        editingRule = nil
-                                        save()
-                                    },
-                                    onTestRule: {
-                                        onTestRule(ruleStore.rules[index])
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
-                    .padding(.vertical, 12)
-                }
             }
         }
         .alert("Rules", isPresented: $showingImportExportAlert) {
@@ -719,24 +698,37 @@ struct RulesTab: View {
 
 struct LabelChip: View {
     let label: String
+    let count: Int
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color.accentColor.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(isSelected ? Color.accentColor.opacity(0.4) : Color(nsColor: .separatorColor), lineWidth: 0.5)
-                )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(isSelected ? Color.accentColor : .primary)
+                Text("\(count)")
+                    .font(.system(size: 9, weight: .medium).monospacedDigit())
+                    .foregroundColor(isSelected ? Color.accentColor : Color.primary.opacity(0.7))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule()
+                            .fill(isSelected ? Color.accentColor.opacity(0.15) : Color(nsColor: .separatorColor).opacity(0.5))
+                    )
+            }
+            .fixedSize()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.4) : Color(nsColor: .separatorColor), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -952,6 +944,17 @@ struct RuleCard: View {
 
                     SettingsDetailSectionCard(title: "Alert") {
                         VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Description:")
+                                    .frame(width: 80, alignment: .trailing)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                TextField("Optional description for this rule", text: $rule.ruleDescription)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12))
+                            }
+
                             LabelSuggestingField(text: $rule.label, allLabels: allLabels)
 
                             DisplayModePicker(displayMode: $rule.displayMode)
@@ -1010,8 +1013,11 @@ struct RuleCard: View {
     }
 
     private var ruleSummary: String {
+        if !rule.ruleDescription.isEmpty { return rule.ruleDescription }
         var parts: [String] = []
-        if !rule.appIdentifier.isEmpty { parts.append("app \(rule.appOperator.rawValue) \"\(rule.appIdentifier)\"") }
+        if !rule.appIdentifier.isEmpty {
+            parts.append(AppNameCache.shared.name(for: rule.appIdentifier))
+        }
         if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.rawValue) \"\(rule.titleContains)\"") }
         if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.rawValue) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
@@ -1890,13 +1896,14 @@ struct LabelSuggestingField: View {
 
     @FocusState private var isFocused: Bool
     @State private var showSuggestions = false
+    @State private var draft: String = ""
 
     private var filteredLabels: [String] {
-        if text.isEmpty {
+        if draft.isEmpty {
             return allLabels
         }
-        let q = text.lowercased()
-        return allLabels.filter { $0.lowercased().contains(q) && $0 != text }
+        let q = draft.lowercased()
+        return allLabels.filter { $0.lowercased().contains(q) && $0 != draft }
     }
 
     var body: some View {
@@ -1906,21 +1913,27 @@ struct LabelSuggestingField: View {
                     .frame(width: 80, alignment: .trailing)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                TextField("e.g. work, personal", text: $text)
+                TextField("e.g. work, personal", text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
                     .frame(minWidth: 280, maxWidth: .infinity)
                     .focused($isFocused)
+                    .onAppear { draft = text }
+                    .onChange(of: text) { _, newValue in
+                        if newValue != draft { draft = newValue }
+                    }
+                    .onSubmit { text = draft }
                     .onChange(of: isFocused) { _, focused in
                         if focused {
                             showSuggestions = true
                         } else {
+                            text = draft
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 showSuggestions = false
                             }
                         }
                     }
-                    .onChange(of: text) { _, _ in
+                    .onChange(of: draft) { _, _ in
                         showSuggestions = isFocused
                     }
             }
@@ -1931,6 +1944,7 @@ struct LabelSuggestingField: View {
                     HStack(spacing: 4) {
                         ForEach(filteredLabels, id: \.self) { label in
                             Button(action: {
+                                draft = label
                                 text = label
                                 showSuggestions = false
                             }) {

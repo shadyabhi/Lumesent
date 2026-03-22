@@ -45,12 +45,27 @@ resolve_sign_identity() {
 }
 
 SIGN_ID="$(resolve_sign_identity)"
+
+# Safety: refuse to sign with a Developer ID or Distribution cert unless explicitly acknowledged.
+# These certs are for publishing to other users — not for local dev builds.
+if [[ "$SIGN_ID" != "-" ]] && { [[ "$SIGN_ID" == *"Developer ID"* ]] || [[ "$SIGN_ID" == *"Distribution"* ]]; }; then
+  if [[ -z "${ALLOW_DISTRIBUTION_SIGN:-}" ]]; then
+    echo "bundle.sh: ERROR: Refusing to sign with distribution cert: $SIGN_ID" >&2
+    echo "bundle.sh: This cert is for publishing apps to other users." >&2
+    echo "bundle.sh: For local dev, use 'Apple Development' (free). For DMGs, use ad-hoc (make dmg)." >&2
+    echo "bundle.sh: To override, set ALLOW_DISTRIBUTION_SIGN=1" >&2
+    exit 1
+  fi
+fi
+
 if [[ "$SIGN_ID" == "-" ]]; then
   CS_EXTRA=()
 else
-  # Avoid requiring Apple's timestamp server for local iteration
+  # Skip Apple's timestamp server — not needed without notarization
   CS_EXTRA=(--timestamp=none)
 fi
+
+echo "bundle.sh: Signing with: ${SIGN_ID}" >&2
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
@@ -59,6 +74,7 @@ mkdir -p "$APP/Contents/Resources"
 cp "$BUILD_DIR/Lumesent" "$APP/Contents/MacOS/Lumesent"
 sed "s/__VERSION__/$VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
 cp "$REPO_ROOT/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+cp "$REPO_ROOT/Resources/Lumesent.sdef" "$APP/Contents/Resources/Lumesent.sdef"
 
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/MacOS/Lumesent"
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP"

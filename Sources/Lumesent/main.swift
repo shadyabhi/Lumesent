@@ -12,95 +12,20 @@ if CommandLine.arguments.contains("--help") || CommandLine.arguments.contains("-
 
     USAGE
       Lumesent                      Launch the menu bar app
-      Lumesent --send [options]     Send an external notification to the running app
 
-    SEND OPTIONS
-      --title <text>        (required) Notification title
-      --body <text>         Notification body
-      --app-name <text>     App name shown in the alert (default: "External")
-      --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
-      --alert-type <type>   "fullscreen" (default) or "notification" (native macOS notification)
-      --no-focus-source     Don't focus the source terminal after alert dismiss (default: focus)
+    EXTERNAL ALERTS (AppleScript)
+      With Lumesent running, use osascript or Script Editor. Automation permission may be required
+      for the calling app (Terminal, iTerm, etc.).
 
-    EXAMPLES
-      Lumesent --send --title "Build failed" --body "exit code 1"
-      Lumesent --send --title "Deploy complete" --app-name "CI" --display-mode sticky
-      Lumesent --send --title "Done!" --alert-type notification
+      Example:
+        osascript -e 'tell application "Lumesent" to send external alert "Build failed" body text "exit 1"'
 
-    External notifications bypass filter rules and are always displayed (unless paused).
-    The app must already be running for --send to work.
+      Optional labeled parameters: application name, display mode (sticky|timed),
+      alert type (fullscreen|notification), focus source terminal (true|false).
+
+    External alerts bypass filter rules and are shown unless Lumesent is paused.
     """
     print(help)
-    exit(0)
-}
-
-// ── CLI: --send --title "…" [--body "…"] [--app-name "…"] [--display-mode sticky|timed] [--alert-type fullscreen|notification] ──
-if CommandLine.arguments.contains("--send") {
-    let args = CommandLine.arguments
-
-    func flagValue(_ flag: String) -> String? {
-        guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
-        return args[idx + 1]
-    }
-
-    guard let title = flagValue("--title") else {
-        fputs("error: --title is required\n", stderr)
-        fputs("usage: Lumesent --send --title \"…\" [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
-        exit(1)
-    }
-
-    let noFocusSource = args.contains("--no-focus-source")
-
-    let payload = ExternalNotification(
-        title: title,
-        body: flagValue("--body"),
-        appName: flagValue("--app-name"),
-        displayMode: flagValue("--display-mode"),
-        alertType: flagValue("--alert-type"),
-        sourceContext: SourceContext.detect(),
-        focusSource: noFocusSource ? false : nil
-    )
-
-    let data: Data
-    do {
-        data = try JSONEncoder().encode(payload)
-    } catch {
-        fputs("error: failed to encode JSON — \(error.localizedDescription)\n", stderr)
-        exit(1)
-    }
-
-    let socketPath = FileLocations.appSupportDirectory.appendingPathComponent("notify.sock").path
-    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-    guard fd >= 0 else { fputs("error: cannot create socket\n", stderr); exit(1) }
-
-    var addr = sockaddr_un()
-    addr.sun_family = sa_family_t(AF_UNIX)
-    let pathMaxLen = MemoryLayout.size(ofValue: addr.sun_path) - 1
-    withUnsafeMutablePointer(to: &addr) { addrPtr in
-        socketPath.withCString { cstr in
-            let sunPath = UnsafeMutableRawPointer(addrPtr).advanced(by: MemoryLayout.offset(of: \sockaddr_un.sun_path)!)
-            strncpy(sunPath.assumingMemoryBound(to: CChar.self), cstr, pathMaxLen)
-        }
-    }
-    let sunPathOffset = Int(MemoryLayout.offset(of: \sockaddr_un.sun_path)!)
-    let addrLen = socklen_t(sunPathOffset + socketPath.utf8.count)
-    addr.sun_len = UInt8(addrLen)
-
-    let connectResult = withUnsafePointer(to: &addr) { ptr in
-        ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-            connect(fd, sockPtr, addrLen)
-        }
-    }
-    guard connectResult == 0 else {
-        fputs("error: cannot connect to Lumesent — is it running?\n", stderr)
-        close(fd)
-        exit(1)
-    }
-
-    data.withUnsafeBytes { buf in
-        _ = write(fd, buf.baseAddress!, buf.count)
-    }
-    close(fd)
     exit(0)
 }
 

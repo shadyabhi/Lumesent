@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/PropertyList.dtd">
+<dictionary title="Lumesent">
+    <suite name="Lumesent Scripting" code="LmSe" description="Send external alerts to Lumesent">
+        <command name="send external alert" code="LmSeSExt" description="Show an external alert (bypasses filter rules unless paused)">
+            <cocoa class="SendExternalAlertScriptCommand"/>
+            <direct-parameter type="text" description="Title"/>
+            <parameter name="body text" code="Lmbd" type="text" optional="yes" description="Body"/>
+            <parameter name="application name" code="Lmap" type="text" optional="yes" description="App name shown in the alert"/>
+            <parameter name="display mode" code="Lmdm" type="text" optional="yes" description="sticky or timed"/>
+            <parameter name="alert type" code="Lmat" type="text" optional="yes" description="fullscreen or notification"/>
+            <parameter name="focus source terminal" code="Lmfc" type="boolean" optional="yes" description="Whether to focus the source terminal after dismiss"/>
+        </command>
+        <class name="application" code="capp" description="The Lumesent application" plural="applications">
+            <cocoa class="NSApplication"/>
+            <responds-to name="send external alert"/>
+        </class>
+    </suite>
+</dictionary>

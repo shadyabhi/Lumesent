@@ -11,7 +11,7 @@
       "Bash(security find-identity:*)",
       "Bash(security verify-cert:*)",
       "Bash(security find-certificate:*)",
-      "Bash(Lumesent.app/Contents/MacOS/Lumesent --send --title \"Alert\")",
+      "Bash(osascript:*)",
       "Bash(echo:*)",
       "Bash(wc:*)",
       "Bash(echo:*)",
@@ -20,7 +20,8 @@
       "Bash(log show:*)",
       "Bash(./Lumesent.app/Contents/MacOS/Lumesent:*)",
       "Bash(find:*)",
-      "Bash(plutil:*)"
+      "Bash(plutil:*)",
+      "Bash(open:*)"
     ]
   }
 }
