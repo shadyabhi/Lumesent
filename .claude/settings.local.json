@@ -27,7 +27,8 @@
       "Bash(sips:*)",
       "Bash(gh repo:*)",
       "Bash(gh run:*)",
-      "Bash(gh release:*)"
+      "Bash(gh release:*)",
+      "Bash(pkill -x Lumesent)"
     ]
   }
 }

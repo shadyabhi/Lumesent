@@ -23,7 +23,7 @@ struct AlertGridView: View {
                 }
 
             let columns = max(1, min(model.cards.count, maxColumns))
-            LazyVGrid(
+            let gridContent = LazyVGrid(
                 columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: 16), count: columns),
                 spacing: 16
             ) {
@@ -40,10 +40,20 @@ struct AlertGridView: View {
                     ))
                 }
             }
+            .fixedSize(horizontal: true, vertical: true)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: model.cards.map(\.id))
-            .frame(maxWidth: .infinity, maxHeight: .infinity,
-                   alignment: layout == .banner ? .top : .center)
-            .padding(.top, layout == .banner ? 40 : 0)
+
+            if layout == .banner {
+                VStack {
+                    gridContent
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                    Spacer()
+                }
+            } else {
+                gridContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -109,15 +119,19 @@ struct AlertCardView: View {
         .onDisappear { timer?.invalidate() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.4))
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.4), radius: 30, y: 12)
         .scaleEffect(appeared ? 1.0 : 0.85)
         .opacity(appeared ? 1.0 : 0.0)
         .onAppear {
