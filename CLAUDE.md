@@ -44,7 +44,7 @@ NotificationMonitor → AppDelegate.handleNewNotification → FilterEngine.match
 
 ### External Notifications
 
-CLI: `Lumesent --send --title "…" [--body "…"] [--app-name "…"] [--display-mode sticky|timed] [--alert-type fullscreen|notification] [--no-focus-source]`. Connects to the running app via a Unix domain socket (`notify.sock` in Application Support). Implemented via [`NotificationServer`](Sources/Lumesent/NotificationServer.swift) (server) and the `--send` CLI path in [`main.swift`](Sources/Lumesent/main.swift) (client). Bypasses filter rules — always shows an alert (unless paused). Auto-detects tmux/iTerm source context for focus-on-dismiss.
+CLI: `Lumesent --send --title "…" [--subtitle "…"] [--body "…"] [--app-name "…"] [--display-mode sticky|timed] [--alert-type fullscreen|notification] [--no-focus-source]`. Connects to the running app via a Unix domain socket (`notify.sock` in Application Support). Implemented via [`NotificationServer`](Sources/Lumesent/NotificationServer.swift) (server) and the `--send` CLI path in [`main.swift`](Sources/Lumesent/main.swift) (client). Bypasses filter rules — always shows an alert (unless paused). Auto-detects tmux/iTerm source context for focus-on-dismiss.
 
 ### UI
 

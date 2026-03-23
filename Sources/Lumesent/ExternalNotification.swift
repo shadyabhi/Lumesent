@@ -71,6 +71,7 @@ enum ExternalAlertType: String, Codable {
 
 struct ExternalNotification: Codable {
     let title: String
+    var subtitle: String?
     var body: String?
     var appName: String?
     var displayMode: String?
@@ -78,6 +79,7 @@ struct ExternalNotification: Codable {
     var sourceContext: SourceContext?
     var focusSource: Bool?
 
+    var resolvedSubtitle: String { subtitle ?? "" }
     var resolvedBody: String { body ?? "" }
     var resolvedAppName: String { appName ?? "External" }
     var resolvedDisplayMode: AlertDisplayMode {

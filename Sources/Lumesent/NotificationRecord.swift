@@ -33,7 +33,7 @@ struct NotificationRecord: Identifiable {
             id: externalIdCounter,
             appIdentifier: "external",
             title: ext.title,
-            subtitle: "",
+            subtitle: ext.resolvedSubtitle,
             body: ext.resolvedBody,
             deliveredDate: Date(),
             overrideAppName: ext.resolvedAppName,

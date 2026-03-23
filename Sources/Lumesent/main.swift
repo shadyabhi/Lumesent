@@ -97,6 +97,7 @@ if subcommand == "send" {
 
         OPTIONS
           --title <text>        (required) Notification title
+          --subtitle <text>     Notification subtitle
           --body <text>         Notification body
           --app-name <text>     App name shown in the alert (default: "External")
           --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
@@ -122,7 +123,7 @@ if subcommand == "send" {
 
     guard let title = flagValue("--title") else {
         fputs("error: --title is required\n", stderr)
-        fputs("usage: Lumesent send --title \"…\" [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
+        fputs("usage: Lumesent send --title \"…\" [--subtitle \"…\"] [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
         exit(1)
     }
 
@@ -130,6 +131,7 @@ if subcommand == "send" {
 
     let payload = ExternalNotification(
         title: title,
+        subtitle: flagValue("--subtitle"),
         body: flagValue("--body"),
         appName: flagValue("--app-name"),
         displayMode: flagValue("--display-mode"),
