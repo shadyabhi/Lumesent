@@ -5,10 +5,36 @@ struct HistoryEntry: Codable, Identifiable {
     let appIdentifier: String
     let appName: String
     let title: String
+    let subtitle: String
     let body: String
     let date: Date
     var matched: Bool = false
     var matchedRuleId: UUID? = nil
+
+    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleId: UUID? = nil) {
+        self.id = UUID()
+        self.appIdentifier = appIdentifier
+        self.appName = appName
+        self.title = title
+        self.subtitle = subtitle
+        self.body = body
+        self.date = date
+        self.matched = matched
+        self.matchedRuleId = matchedRuleId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        appIdentifier = try c.decode(String.self, forKey: .appIdentifier)
+        appName = try c.decode(String.self, forKey: .appName)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        body = try c.decode(String.self, forKey: .body)
+        date = try c.decode(Date.self, forKey: .date)
+        matched = try c.decodeIfPresent(Bool.self, forKey: .matched) ?? false
+        matchedRuleId = try c.decodeIfPresent(UUID.self, forKey: .matchedRuleId)
+    }
 }
 
 class NotificationHistory: ObservableObject {
@@ -29,6 +55,7 @@ class NotificationHistory: ObservableObject {
             appIdentifier: notification.appIdentifier,
             appName: notification.appName,
             title: notification.title,
+            subtitle: notification.subtitle,
             body: notification.body,
             date: notification.deliveredDate,
             matched: matched,
@@ -91,12 +118,13 @@ class NotificationHistory: ObservableObject {
 }
 
 enum SuggestionField {
-    case appIdentifier, title, body
+    case appIdentifier, title, subtitle, body
 
     func value(from entry: HistoryEntry) -> String {
         switch self {
         case .appIdentifier: return entry.appIdentifier
         case .title: return entry.title
+        case .subtitle: return entry.subtitle
         case .body: return entry.body
         }
     }

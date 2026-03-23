@@ -93,6 +93,13 @@ struct AlertCardView: View {
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
 
+            if !card.notification.subtitle.isEmpty {
+                Text(card.notification.subtitle)
+                    .font(.system(size: titleSize * 0.75, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
+
             if !card.notification.body.isEmpty {
                 Text(card.notification.body)
                     .font(.system(size: bodySize))

@@ -130,12 +130,13 @@ final class NotificationMonitor: ObservableObject {
             }
 
             var title = ""
+            var subtitle = ""
             var body = ""
 
             if let dataBlob = sqlite3_column_blob(stmt, 2) {
                 let dataLen = sqlite3_column_bytes(stmt, 2)
                 let data = Data(bytes: dataBlob, count: Int(dataLen))
-                (title, body) = parsePlist(data)
+                (title, subtitle, body) = parsePlist(data)
             }
 
             let deliveredDate: Date
@@ -150,6 +151,7 @@ final class NotificationMonitor: ObservableObject {
                 id: recId,
                 appIdentifier: appIdentifier,
                 title: title,
+                subtitle: subtitle,
                 body: body,
                 deliveredDate: deliveredDate
             )
@@ -162,17 +164,18 @@ final class NotificationMonitor: ObservableObject {
         return foundAny
     }
 
-    private func parsePlist(_ data: Data) -> (title: String, body: String) {
+    private func parsePlist(_ data: Data) -> (title: String, subtitle: String, body: String) {
         guard let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let req = plist["req"] as? [String: Any]
         else {
             AppLog.shared.debug("parsePlist failed — could not decode plist blob (\(data.count, privacy: .public) bytes)")
-            return ("", "")
+            return ("", "", "")
         }
 
         let title = req["titl"] as? String ?? ""
+        let subtitle = req["subt"] as? String ?? ""
         let body = req["body"] as? String ?? ""
-        return (title, body)
+        return (title, subtitle, body)
     }
 
     // MARK: - Accessibility Observer

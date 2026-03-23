@@ -4,15 +4,17 @@ struct NotificationRecord: Identifiable {
     let id: Int64  // rec_id from DB (negative for external notifications)
     let appIdentifier: String
     let title: String
+    let subtitle: String
     let body: String
     let deliveredDate: Date
     private let overrideAppName: String?
     let sourceContext: SourceContext?
 
-    init(id: Int64, appIdentifier: String, title: String, body: String, deliveredDate: Date) {
+    init(id: Int64, appIdentifier: String, title: String, subtitle: String = "", body: String, deliveredDate: Date) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.title = title
+        self.subtitle = subtitle
         self.body = body
         self.deliveredDate = deliveredDate
         self.overrideAppName = nil
@@ -31,6 +33,7 @@ struct NotificationRecord: Identifiable {
             id: externalIdCounter,
             appIdentifier: "external",
             title: ext.title,
+            subtitle: "",
             body: ext.resolvedBody,
             deliveredDate: Date(),
             overrideAppName: ext.resolvedAppName,
@@ -38,10 +41,11 @@ struct NotificationRecord: Identifiable {
         )
     }
 
-    private init(id: Int64, appIdentifier: String, title: String, body: String, deliveredDate: Date, overrideAppName: String?, sourceContext: SourceContext?) {
+    private init(id: Int64, appIdentifier: String, title: String, subtitle: String, body: String, deliveredDate: Date, overrideAppName: String?, sourceContext: SourceContext?) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.title = title
+        self.subtitle = subtitle
         self.body = body
         self.deliveredDate = deliveredDate
         self.overrideAppName = overrideAppName

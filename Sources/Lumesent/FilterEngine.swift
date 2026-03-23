@@ -32,6 +32,12 @@ class FilterEngine {
                 return false
             }
         }
+        if !r.subtitleContains.isEmpty {
+            guard r.subtitleOperator.matches(n.subtitle, r.subtitleContains) else {
+                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): subtitle mismatch — op=\(r.subtitleOperator.rawValue, privacy: .public) pattern=\(r.subtitleContains, privacy: .public) actual=\(n.subtitle, privacy: .public)")
+                return false
+            }
+        }
         if !r.bodyContains.isEmpty {
             guard r.bodyOperator.matches(n.body, r.bodyContains) else {
                 AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): body mismatch — op=\(r.bodyOperator.rawValue, privacy: .public) pattern=\(r.bodyContains, privacy: .public)")

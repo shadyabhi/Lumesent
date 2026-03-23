@@ -47,6 +47,8 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var appOperator: MatchOperator
     var titleContains: String  // empty = match any title
     var titleOperator: MatchOperator
+    var subtitleContains: String  // empty = match any subtitle
+    var subtitleOperator: MatchOperator
     var bodyContains: String   // empty = match any body
     var bodyOperator: MatchOperator
     var isEnabled: Bool
@@ -55,12 +57,14 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var displayMode: AlertDisplayMode
     var focusSourceOnDismiss: Bool
 
-    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
+    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.appOperator = appOperator
         self.titleContains = titleContains
         self.titleOperator = titleOperator
+        self.subtitleContains = subtitleContains
+        self.subtitleOperator = subtitleOperator
         self.bodyContains = bodyContains
         self.bodyOperator = bodyOperator
         self.isEnabled = isEnabled
@@ -77,6 +81,8 @@ struct FilterRule: Identifiable, Codable, Equatable {
         appOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .appOperator) ?? .contains
         titleContains = try c.decode(String.self, forKey: .titleContains)
         titleOperator = try c.decode(MatchOperator.self, forKey: .titleOperator)
+        subtitleContains = try c.decodeIfPresent(String.self, forKey: .subtitleContains) ?? ""
+        subtitleOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .subtitleOperator) ?? .contains
         bodyContains = try c.decode(String.self, forKey: .bodyContains)
         bodyOperator = try c.decode(MatchOperator.self, forKey: .bodyOperator)
         isEnabled = try c.decode(Bool.self, forKey: .isEnabled)
@@ -87,7 +93,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
     }
 
     var isValid: Bool {
-        !appIdentifier.isEmpty || !titleContains.isEmpty || !bodyContains.isEmpty
+        !appIdentifier.isEmpty || !titleContains.isEmpty || !subtitleContains.isEmpty || !bodyContains.isEmpty
     }
 
     /// Sample notification for “Test this rule” previews.
@@ -95,7 +101,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         let app = appIdentifier.isEmpty ? "com.apple.Terminal" : appIdentifier
         let t = titleContains.isEmpty ? "Preview: matched title" : titleContains
         let b = bodyContains.isEmpty ? "This is sample body text for your rule preview." : bodyContains
-        return NotificationRecord(id: -42, appIdentifier: app, title: t, body: b, deliveredDate: Date())
+        return NotificationRecord(id: -42, appIdentifier: app, title: t, subtitle: "", body: b, deliveredDate: Date())
     }
 
     /// AND logic for non-empty filter fields. Does not check `isEnabled` or `isValid` (for previews).
@@ -105,6 +111,9 @@ struct FilterRule: Identifiable, Codable, Equatable {
         }
         if !titleContains.isEmpty {
             guard titleOperator.matches(notification.title, titleContains) else { return false }
+        }
+        if !subtitleContains.isEmpty {
+            guard subtitleOperator.matches(notification.subtitle, subtitleContains) else { return false }
         }
         if !bodyContains.isEmpty {
             guard bodyOperator.matches(notification.body, bodyContains) else { return false }

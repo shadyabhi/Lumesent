@@ -275,11 +275,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         addDisabled(entry.appName)
         let titleText = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let subtitleText = entry.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let bodyText = entry.body.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if !titleText.isEmpty {
             menu.addItem(.separator())
             for line in splitTextForMenuLines(titleText) {
+                addDisabled(line)
+            }
+        }
+        if !subtitleText.isEmpty {
+            menu.addItem(.separator())
+            for line in splitTextForMenuLines(subtitleText) {
                 addDisabled(line)
             }
         }
@@ -419,7 +426,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     private func shouldSuppressDuplicate(_ record: NotificationRecord) -> Bool {
-        let key = "\(record.appIdentifier)|\(record.title)|\(record.body)"
+        let key = "\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
         let now = Date()
         if let dk = dedupKey, dk == key, let t = dedupTime, now.timeIntervalSince(t) < 5 {
             return true
@@ -495,6 +502,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             id: -1,
             appIdentifier: entry.appIdentifier,
             title: entry.title,
+            subtitle: entry.subtitle,
             body: entry.body,
             deliveredDate: entry.date
         )

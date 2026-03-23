@@ -663,7 +663,7 @@ struct RulesTab: View {
         // Don't open another if we're already editing an empty/unsaved rule
         if let editing = editingRule,
            let existing = ruleStore.rules.first(where: { $0.id == editing.id }),
-           existing.appIdentifier.isEmpty && existing.titleContains.isEmpty && existing.bodyContains.isEmpty {
+           existing.appIdentifier.isEmpty && existing.titleContains.isEmpty && existing.subtitleContains.isEmpty && existing.bodyContains.isEmpty {
             return
         }
         let rule = FilterRule()
@@ -971,6 +971,14 @@ struct RuleCard: View {
                                 }
                                 .frame(width: 120)
                             }
+                            SuggestingField("Subtitle:", text: $rule.subtitleContains, placeholder: "e.g. channel name", history: history, field: .subtitle, suggestionLeadingInset: 216) {
+                                Picker("", selection: $rule.subtitleOperator) {
+                                    ForEach(MatchOperator.allCases, id: \.self) { op in
+                                        Text(op.rawValue).tag(op)
+                                    }
+                                }
+                                .frame(width: 120)
+                            }
                             SuggestingField("Body:", text: $rule.bodyContains, placeholder: "e.g. deploy failed", history: history, field: .body, suggestionLeadingInset: 216) {
                                 Picker("", selection: $rule.bodyOperator) {
                                     ForEach(MatchOperator.allCases, id: \.self) { op in
@@ -1060,6 +1068,7 @@ struct RuleCard: View {
             parts.append(AppNameCache.shared.name(for: rule.appIdentifier))
         }
         if !rule.titleContains.isEmpty { parts.append("title \(rule.titleOperator.rawValue) \"\(rule.titleContains)\"") }
+        if !rule.subtitleContains.isEmpty { parts.append("subtitle \(rule.subtitleOperator.rawValue) \"\(rule.subtitleContains)\"") }
         if !rule.bodyContains.isEmpty { parts.append("body \(rule.bodyOperator.rawValue) \"\(rule.bodyContains)\"") }
         return parts.isEmpty ? "New Rule (unconfigured)" : parts.joined(separator: " + ")
     }
@@ -1068,7 +1077,7 @@ struct RuleCard: View {
     private var historyPreviewMatches: [HistoryEntry] {
         history.entries
             .filter { entry in
-                let n = NotificationRecord(id: 0, appIdentifier: entry.appIdentifier, title: entry.title, body: entry.body, deliveredDate: entry.date)
+                let n = NotificationRecord(id: 0, appIdentifier: entry.appIdentifier, title: entry.title, subtitle: entry.subtitle, body: entry.body, deliveredDate: entry.date)
                 return rule.matchesFields(of: n)
             }
             .sorted { $0.date > $1.date }
@@ -1178,6 +1187,13 @@ struct MatchedNotificationRow: View {
                         .foregroundStyle(.tertiary)
                 }
 
+                if !entry.subtitle.isEmpty {
+                    Text(entry.subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
                 if !entry.body.isEmpty {
                     Text(entry.body)
                         .font(.system(size: 11))
@@ -1285,6 +1301,13 @@ struct HistoryRow: View {
                         .lineLimit(2)
                 }
 
+                if !entry.subtitle.isEmpty {
+                    Text(entry.subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
                 if !entry.body.isEmpty {
                     Text(entry.body)
                         .font(.system(size: 12))
@@ -1326,6 +1349,7 @@ struct HistoryRow: View {
             id: -1,
             appIdentifier: entry.appIdentifier,
             title: entry.title,
+            subtitle: entry.subtitle,
             body: entry.body,
             deliveredDate: entry.date
         )
@@ -1348,6 +1372,7 @@ struct QuickRuleCreator: View {
 
     @State private var useApp = true
     @State private var useTitle = false
+    @State private var useSubtitle = false
     @State private var useBody = false
     @State private var label = ""
 
@@ -1390,6 +1415,21 @@ struct QuickRuleCreator: View {
                         .toggleStyle(.checkbox)
                     }
 
+                    if !entry.subtitle.isEmpty {
+                        Toggle(isOn: $useSubtitle) {
+                            HStack {
+                                Text("Subtitle:")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .frame(width: 40, alignment: .trailing)
+                                Text(entry.subtitle)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+
                     if !entry.body.isEmpty {
                         Toggle(isOn: $useBody) {
                             HStack {
@@ -1421,7 +1461,7 @@ struct QuickRuleCreator: View {
                     Button("Create") { createRule() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                        .disabled(!useApp && !useTitle && !useBody)
+                        .disabled(!useApp && !useTitle && !useSubtitle && !useBody)
                 }
                 .padding(.top, 10)
             }
@@ -1434,6 +1474,7 @@ struct QuickRuleCreator: View {
         let rule = FilterRule(
             appIdentifier: useApp ? entry.appIdentifier : "",
             titleContains: useTitle ? entry.title : "",
+            subtitleContains: useSubtitle ? entry.subtitle : "",
             bodyContains: useBody ? entry.body : "",
             label: label
         )
@@ -1611,6 +1652,13 @@ struct NotificationPreview: View {
                 if !entry.title.isEmpty {
                     Text(entry.title)
                         .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(2)
+                }
+
+                if !entry.subtitle.isEmpty {
+                    Text(entry.subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
