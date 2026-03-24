@@ -473,7 +473,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     private func handleNewNotification(_ record: NotificationRecord) {
-        AppLog.shared.debug("handleNewNotification: app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public) body=\(record.body.prefix(80), privacy: .public)")
+        AppLog.shared.info("handleNewNotification: app=\(record.appName, privacy: .public) (\(record.appIdentifier, privacy: .public)) title=\(record.title, privacy: .public) subtitle=\(record.subtitle, privacy: .public) body=\(record.body.prefix(80), privacy: .public) time=\(record.deliveredDate.description, privacy: .public)")
         let matchedRule = filterEngine.matchingRule(for: record)
         notificationHistory.record(record, matched: matchedRule != nil, matchedRuleId: matchedRule?.id)
 

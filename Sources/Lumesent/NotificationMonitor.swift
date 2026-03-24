@@ -118,6 +118,7 @@ final class NotificationMonitor: ObservableObject {
 
         sqlite3_bind_int64(stmt, 1, lastSeenRecId)
         var foundAny = false
+        var fetchCount = 0
 
         while sqlite3_step(stmt) == SQLITE_ROW {
             let recId = sqlite3_column_int64(stmt, 0)
@@ -157,9 +158,13 @@ final class NotificationMonitor: ObservableObject {
             )
 
             foundAny = true
+            fetchCount += 1
             lastSeenRecId = recId
-            AppLog.shared.debug("new notification from \(appIdentifier, privacy: .public): \(title, privacy: .public)")
+            AppLog.shared.info("fetched notification rec_id=\(recId, privacy: .public) app=\(appIdentifier, privacy: .public) title=\(title, privacy: .public) subtitle=\(subtitle, privacy: .public) body=\(body.prefix(80), privacy: .public) delivered=\(deliveredDate.description, privacy: .public)")
             onNewNotification(record)
+        }
+        if fetchCount > 0 {
+            AppLog.shared.info("fetchNewNotifications: \(fetchCount, privacy: .public) new notification(s), lastSeenRecId=\(self.lastSeenRecId, privacy: .public)")
         }
         return foundAny
     }

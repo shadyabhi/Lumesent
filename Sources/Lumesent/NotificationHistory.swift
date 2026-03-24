@@ -61,6 +61,7 @@ class NotificationHistory: ObservableObject {
             matched: matched,
             matchedRuleId: matchedRuleId
         )
+        AppLog.shared.info("history: recording app=\(notification.appName, privacy: .public) (\(notification.appIdentifier, privacy: .public)) title=\(notification.title, privacy: .public) subtitle=\(notification.subtitle, privacy: .public) time=\(notification.deliveredDate.description, privacy: .public) matched=\(matched, privacy: .public)")
         entries.append(entry)
 
         if entries.count > Self.maxEntries {
