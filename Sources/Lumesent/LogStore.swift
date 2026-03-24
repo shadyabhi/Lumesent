@@ -43,7 +43,7 @@ final class LogStore: ObservableObject {
     func start() {
         fetch()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.fetch()
             }
         }
@@ -63,7 +63,7 @@ final class LogStore: ObservableObject {
         let isFirstLoad = entries.isEmpty
         if isFirstLoad { isLoading = true }
 
-        fetchTask = Task.detached(priority: .userInitiated) {
+        fetchTask = Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let store = try OSLogStore(scope: .system)
                 let position = store.position(date: Date().addingTimeInterval(-timeWindow))
@@ -82,13 +82,13 @@ final class LogStore: ObservableObject {
                 }
 
                 let result = newEntries
-                await MainActor.run {
-                    self.entries = result
-                    self.isLoading = false
+                await MainActor.run { [weak self] in
+                    self?.entries = result
+                    self?.isLoading = false
                 }
             } catch {
-                await MainActor.run {
-                    self.isLoading = false
+                await MainActor.run { [weak self] in
+                    self?.isLoading = false
                 }
                 AppLog.shared.error("LogStore: failed to read log store: \(error.localizedDescription, privacy: .public)")
             }
