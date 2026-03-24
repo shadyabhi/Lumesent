@@ -20,16 +20,19 @@ struct SettingsView: View {
     let onTestRule: (FilterRule) -> Void
 
     @State private var selectedSidebarItem: SettingsSidebarItem = .rulesActive
+    @StateObject private var logStore = LogStore()
 
     enum SettingsSidebarItem: Hashable {
         case rulesActive
         case history
+        case logs
         case settings
 
         var detailTitle: String {
             switch self {
             case .rulesActive: return "Active"
             case .history: return "History"
+            case .logs: return "Logs"
             case .settings: return "Settings"
             }
         }
@@ -103,6 +106,14 @@ struct SettingsView: View {
                             )
                         }
 
+                        SettingsSidebarGroup(title: "Logs") {
+                            settingsSidebarRow(
+                                title: "Logs",
+                                systemImage: "doc.text",
+                                item: .logs
+                            )
+                        }
+
                         SettingsSidebarGroup(title: "Settings") {
                             settingsSidebarRow(
                                 title: "Settings",
@@ -124,6 +135,8 @@ struct SettingsView: View {
                             RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
                         case .history:
                             HistoryTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+                        case .logs:
+                            LogsTab(logStore: logStore)
                         case .settings:
                             SettingsTab(appSettings: appSettings, history: history)
                         }
@@ -142,6 +155,7 @@ struct SettingsView: View {
                 switch tab {
                 case "rulesActive": selectedSidebarItem = .rulesActive
                 case "history": selectedSidebarItem = .history
+                case "logs": selectedSidebarItem = .logs
                 case "settings": selectedSidebarItem = .settings
                 default: break
                 }
@@ -2248,6 +2262,192 @@ struct DisplayModePicker: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+// MARK: - Logs Tab
+
+import OSLog
+
+struct LogsTab: View {
+    @ObservedObject var logStore: LogStore
+    @State private var searchText = ""
+    @State private var showErrorsOnly = false
+    @State private var selectedTimeWindow: TimeInterval = 3600
+
+    private static let timeWindowOptions: [(label: String, seconds: TimeInterval)] = [
+        ("5m", 300),
+        ("15m", 900),
+        ("30m", 1800),
+        ("1h", 3600),
+        ("2h", 7200),
+        ("6h", 21600),
+    ]
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    private var displayedEntries: [LogEntry] {
+        var result = showErrorsOnly ? logStore.entries.filter(\.isError) : logStore.entries
+        if !searchText.isEmpty {
+            let q = searchText.lowercased()
+            result = result.filter { $0.message.lowercased().contains(q) }
+        }
+        return result
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                    TextField("Filter logs...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                )
+
+                Toggle("Errors only", isOn: $showErrorsOnly)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12))
+
+                Picker("Time", selection: $selectedTimeWindow) {
+                    ForEach(Self.timeWindowOptions, id: \.seconds) { option in
+                        Text(option.label).tag(option.seconds)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.system(size: 12))
+                .frame(width: 90)
+                .onChange(of: selectedTimeWindow) { _, newValue in
+                    logStore.timeWindow = newValue
+                    logStore.fetch()
+                }
+
+                Spacer()
+
+                Text("\(displayedEntries.count) entries")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    logStore.fetch()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh logs")
+            }
+            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            // Log entries
+            if logStore.isLoading {
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading logs...")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if displayedEntries.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.quaternary)
+                    Text(showErrorsOnly ? "No errors" : "No log entries")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(displayedEntries) { entry in
+                                logRow(entry)
+                                    .id(entry.id)
+                            }
+                        }
+                        .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                        .padding(.vertical, 8)
+                    }
+                    .onAppear {
+                        if let last = displayedEntries.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: logStore.entries.count) { _, _ in
+                        if let last = displayedEntries.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear { logStore.start() }
+        .onDisappear { logStore.stop() }
+    }
+
+    private func logRow(_ entry: LogEntry) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(Self.timeFormatter.string(from: entry.date))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 85, alignment: .leading)
+
+            Text(entry.levelLabel)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(levelColor(entry.level))
+                .frame(width: 48, alignment: .leading)
+
+            Text(entry.message)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(entry.isError ? .red : .primary)
+                .lineLimit(nil)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 4)
+        .background(entry.isError ? Color.red.opacity(0.06) : Color.clear)
+    }
+
+    private func levelColor(_ level: OSLogEntryLog.Level) -> Color {
+        switch level {
+        case .error, .fault: return .red
+        case .notice: return .orange
+        case .info: return .blue
+        case .debug: return .secondary
+        default: return .secondary
         }
     }
 }

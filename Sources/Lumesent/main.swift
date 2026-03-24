@@ -57,11 +57,12 @@ if subcommand == "logs" {
     let last = flagValue("--last") ?? "1h"
     let follow = args.contains("--follow")
 
+    let predicate = "subsystem == \"com.shadyabhi.Lumesent\""
     var logArgs = [String]()
     if follow {
-        logArgs += ["stream", "--predicate", "process == \"Lumesent\""]
+        logArgs += ["stream", "--predicate", predicate, "--level", "info"]
     } else {
-        logArgs += ["show", "--predicate", "process == \"Lumesent\"", "--last", last]
+        logArgs += ["show", "--predicate", predicate, "--last", last, "--info"]
     }
 
     let task = Process()
