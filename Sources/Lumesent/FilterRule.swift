@@ -56,8 +56,9 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var ruleDescription: String  // empty = no description
     var displayMode: AlertDisplayMode
     var focusSourceOnDismiss: Bool
+    var cooldownSeconds: Double
 
-    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true) {
+    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true, cooldownSeconds: Double = 60) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.appOperator = appOperator
@@ -72,6 +73,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         self.ruleDescription = ruleDescription
         self.displayMode = displayMode
         self.focusSourceOnDismiss = focusSourceOnDismiss
+        self.cooldownSeconds = cooldownSeconds
     }
 
     init(from decoder: Decoder) throws {
@@ -90,6 +92,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         ruleDescription = try c.decodeIfPresent(String.self, forKey: .ruleDescription) ?? ""
         displayMode = try c.decode(AlertDisplayMode.self, forKey: .displayMode)
         focusSourceOnDismiss = try c.decodeIfPresent(Bool.self, forKey: .focusSourceOnDismiss) ?? true
+        cooldownSeconds = try c.decodeIfPresent(Double.self, forKey: .cooldownSeconds) ?? 60
     }
 
     var isValid: Bool {

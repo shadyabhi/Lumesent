@@ -24,6 +24,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     private var dedupKey: String?
     private var dedupTime: Date?
+    /// Tracks the last alert time per rule+content combination for cooldown suppression.
+    private var ruleCooldowns: [String: Date] = [:]
     /// Maps native notification request IDs → source contexts for focus-on-click.
     private var nativeNotificationContexts: [String: SourceContext] = [:]
 
@@ -475,22 +477,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private func handleNewNotification(_ record: NotificationRecord) {
         AppLog.shared.info("handleNewNotification: app=\(record.appName, privacy: .public) (\(record.appIdentifier, privacy: .public)) title=\(record.title, privacy: .public) subtitle=\(record.subtitle, privacy: .public) body=\(record.body.prefix(80), privacy: .public) time=\(record.deliveredDate.description, privacy: .public)")
         let matchedRule = filterEngine.matchingRule(for: record)
-        notificationHistory.record(record, matched: matchedRule != nil, matchedRuleId: matchedRule?.id)
 
         guard let rule = matchedRule else {
+            notificationHistory.record(record, matched: false)
             AppLog.shared.debug("no rule matched for: app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
             return
         }
         AppLog.shared.info("rule matched: ruleId=\(rule.id.uuidString, privacy: .public) label=\(rule.label, privacy: .public) for app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
         guard !appSettings.isPauseActive else {
+            notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
             AppLog.shared.debug("skipped alert (paused until \(String(describing: self.appSettings.pauseAlertsUntil), privacy: .public)): \(record.title, privacy: .public)")
             return
         }
         if shouldSuppressDuplicate(record) {
+            notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
             AppLog.shared.debug("dedup skip: \(record.title, privacy: .public)")
             return
         }
+        let cooldownKey = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
+        if rule.cooldownSeconds > 0, let lastFired = ruleCooldowns[cooldownKey],
+           Date().timeIntervalSince(lastFired) < rule.cooldownSeconds {
+            notificationHistory.record(record, matched: true, matchedRuleId: rule.id, cooldownSuppressed: true)
+            AppLog.shared.info("cooldown skip: ruleId=\(rule.id.uuidString, privacy: .public) title=\(record.title, privacy: .public) (cooldown \(rule.cooldownSeconds, privacy: .public)s)")
+            return
+        }
 
+        notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
+        ruleCooldowns[cooldownKey] = Date()
         AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: rule.displayMode), privacy: .public) focusSource=\(rule.focusSourceOnDismiss, privacy: .public)")
         presentAlert(for: record, displayMode: rule.displayMode, focusSourceOnDismiss: rule.focusSourceOnDismiss)
     }

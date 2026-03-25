@@ -1022,6 +1022,26 @@ struct RuleCard: View {
                             DisplayModePicker(displayMode: $rule.displayMode)
 
                             HStack {
+                                Text("Cooldown:")
+                                    .frame(width: 80, alignment: .trailing)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                TextField("sec", value: $rule.cooldownSeconds, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12))
+                                    .frame(width: 60)
+
+                                Text("sec")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                Text("— suppress duplicate rule matches")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            HStack {
                                 Text("On dismiss:")
                                     .frame(width: 80, alignment: .trailing)
                                     .font(.system(size: 12))
@@ -1295,7 +1315,15 @@ struct HistoryRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if entry.matched {
+                    if entry.cooldownSuppressed {
+                        Text("cooldown")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.orange.opacity(0.1))
+                            .clipShape(Capsule())
+                    } else if entry.matched {
                         Text("matched")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.green)
