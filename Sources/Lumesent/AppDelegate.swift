@@ -621,7 +621,12 @@ extension AppDelegate: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
-        AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
+        let nsError = error as NSError
+        if nsError.domain == SUSparkleErrorDomain && nsError.code == Int(SUError.noUpdateError.rawValue) {
+            AppLog.shared.info("Sparkle: already up to date")
+        } else {
+            AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 
