@@ -175,9 +175,17 @@ jobs:
             "$SPARKLE_SIG" \
             "$PUB_DATE"
 
+          # Build release notes from commit log since previous tag (skip merge commits)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            NOTES=$(git log --no-merges --format="- %s" "${PREV_TAG}..${{ github.ref_name }}")
+          else
+            NOTES=$(git log --no-merges --format="- %s" "${{ github.ref_name }}")
+          fi
+
           gh release create "${{ github.ref_name }}" \
             "$DMG_FILE" \
             appcast.xml \
             --draft \
             --title "Lumesent ${VERSION}" \
-            --generate-notes
+            --notes "$NOTES"
