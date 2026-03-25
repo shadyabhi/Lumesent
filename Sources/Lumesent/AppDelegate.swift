@@ -621,6 +621,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
 extension AppDelegate: SPUUpdaterDelegate {
     func feedURLString(for updater: SPUUpdater) -> String? {
-        appSettings.updateChannel.feedURL.absoluteString
+        let url = appSettings.updateChannel.feedURL.absoluteString
+        AppLog.shared.info("Sparkle feed URL: \(url, privacy: .public) (channel: \(self.appSettings.updateChannel.rawValue, privacy: .public))")
+        return url
+    }
+
+    func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) {
+        let items = appcast.items.map { $0.versionString }
+        AppLog.shared.info("Sparkle loaded appcast with versions: \(items, privacy: .public)")
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
     }
 }

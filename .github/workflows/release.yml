@@ -165,27 +165,26 @@ jobs:
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${DMG_FILE}"
           PUB_DATE=$(date -R)
 
-          cat > appcast.xml << APPCAST_EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-            <channel>
-              <title>Lumesent Updates</title>
-              <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>
-              <item>
-                <title>Version ${VERSION}</title>
-                <pubDate>${PUB_DATE}</pubDate>
-                <enclosure
-                  url="${DMG_URL}"
-                  ${SPARKLE_SIG}
-                  length="${DMG_SIZE}"
-                  type="application/octet-stream" />
-                <sparkle:version>${VERSION}</sparkle:version>
-                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-              </item>
-            </channel>
-          </rss>
-          APPCAST_EOF
+          cat > appcast.xml <<APPCAST_EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Lumesent Updates</title>
+    <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>
+    <item>
+      <title>Version ${VERSION}</title>
+      <pubDate>${PUB_DATE}</pubDate>
+      <enclosure
+        url="${DMG_URL}"
+        ${SPARKLE_SIG}
+        type="application/octet-stream" />
+      <sparkle:version>${VERSION}</sparkle:version>
+      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+    </item>
+  </channel>
+</rss>
+APPCAST_EOF
 
           gh release create "${{ github.ref_name }}" \
             "$DMG_FILE" \

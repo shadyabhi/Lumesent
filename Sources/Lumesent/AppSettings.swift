@@ -42,6 +42,12 @@ enum UpdateChannel: String, Codable, CaseIterable {
         case .head: URL(string: "https://github.com/shadyabhi/lumesent/releases/download/head/appcast-head.xml")!
         }
     }
+
+    /// Head builds have CFBundleVersion set to "head" by CI.
+    static var defaultForCurrentBuild: UpdateChannel {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        return version.hasPrefix("head") ? .head : .stable
+    }
 }
 
 class AppSettings: ObservableObject {
@@ -51,7 +57,7 @@ class AppSettings: ObservableObject {
     /// When non-nil and in the future, matched alerts are suppressed.
     @Published var pauseAlertsUntil: Date?
     @Published var socketPath: String = FileLocations.defaultSocketPath
-    @Published var updateChannel: UpdateChannel = .stable
+    @Published var updateChannel: UpdateChannel = UpdateChannel.defaultForCurrentBuild
 
     private let fileURL: URL
 
@@ -95,7 +101,7 @@ class AppSettings: ObservableObject {
         alertPresentation = decoded.alertPresentation
         pauseAlertsUntil = decoded.pauseAlertsUntil
         socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
-        updateChannel = decoded.updateChannel ?? .stable
+        updateChannel = decoded.updateChannel ?? UpdateChannel.defaultForCurrentBuild
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
