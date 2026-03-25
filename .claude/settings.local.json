@@ -32,7 +32,17 @@
       "Bash(nm /Users/shadyabhi/coder/lumesent/Lumesent.app/Contents/MacOS/Lumesentkj)",
       "Bash(bash scripts/make-dmg.sh 2>&1)",
       "Bash(gh issue:*)",
-      "Bash(swift package:*)"
+      "Bash(swift package:*)",
+      "Bash(gh api:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(ruby:*)",
+      "Bash(chmod:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh tag:*)",
+      "Bash(git log:)"
     ]
   }
 }

@@ -365,10 +365,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     @objc private func openLogs() {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = ["-a", "Console"]
-        try? task.run()
+        openSettings()
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "logs")
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
