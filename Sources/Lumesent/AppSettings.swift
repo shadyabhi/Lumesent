@@ -50,6 +50,22 @@ enum UpdateChannel: String, Codable, CaseIterable {
     }
 }
 
+enum UpdateCheckInterval: Int, Codable, CaseIterable {
+    case every30Minutes = 1800
+    case everyHour = 3600
+    case every4Hours = 14400
+    case everyDay = 86400
+
+    var displayName: String {
+        switch self {
+        case .every30Minutes: "Every 30 minutes"
+        case .everyHour: "Every hour"
+        case .every4Hours: "Every 4 hours"
+        case .everyDay: "Every day"
+        }
+    }
+}
+
 class AppSettings: ObservableObject {
     @Published var dismissKey: DismissKeyShortcut?
     @Published var showInDock: Bool = false
@@ -58,6 +74,7 @@ class AppSettings: ObservableObject {
     @Published var pauseAlertsUntil: Date?
     @Published var socketPath: String = FileLocations.defaultSocketPath
     @Published var updateChannel: UpdateChannel = UpdateChannel.defaultForCurrentBuild
+    @Published var updateCheckInterval: UpdateCheckInterval = .everyHour
 
     private let fileURL: URL
 
@@ -79,7 +96,8 @@ class AppSettings: ObservableObject {
                 alertPresentation: alertPresentation,
                 pauseAlertsUntil: pauseAlertsUntil,
                 socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
-                updateChannel: updateChannel == .stable ? nil : updateChannel
+                updateChannel: updateChannel == .stable ? nil : updateChannel,
+                updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval
             ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -102,6 +120,7 @@ class AppSettings: ObservableObject {
         pauseAlertsUntil = decoded.pauseAlertsUntil
         socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
         updateChannel = decoded.updateChannel ?? UpdateChannel.defaultForCurrentBuild
+        updateCheckInterval = decoded.updateCheckInterval ?? .everyHour
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -112,5 +131,6 @@ class AppSettings: ObservableObject {
         var pauseAlertsUntil: Date?
         var socketPath: String?
         var updateChannel: UpdateChannel?
+        var updateCheckInterval: UpdateCheckInterval?
     }
 }

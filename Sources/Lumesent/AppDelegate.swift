@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var permissionObservation: Any?
     private var cancellables = Set<AnyCancellable>()
     private var iconFlashTimer: Timer?
-    private var updaterController: SPUStandardUpdaterController!
+    var updaterController: SPUStandardUpdaterController!
 
     private var dedupKey: String?
     private var dedupTime: Date?
@@ -35,7 +35,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         AppLog.shared.info("app launching, pid=\(ProcessInfo.processInfo.processIdentifier, privacy: .public)")
         ruleStore = RuleStore()
         appSettings = AppSettings()
-        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
+        updaterController.updater.updateCheckInterval = TimeInterval(appSettings.updateCheckInterval.rawValue)
+        DispatchQueue.main.async { [weak self] in
+            try? self?.updaterController.updater.start()
+        }
         notificationHistory = NotificationHistory()
         filterEngine = FilterEngine(rules: ruleStore.rules)
         permissionChecker = PermissionChecker()

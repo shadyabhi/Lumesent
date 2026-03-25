@@ -1960,9 +1960,27 @@ struct SettingsTab: View {
                         Text("Stable tracks tagged releases. Head tracks the latest build from main.")
                             .font(.system(size: 11))
                             .foregroundStyle(captionColor)
+
+                        HStack(spacing: 12) {
+                            Text("Check interval")
+                                .font(.system(size: 13))
+                            Picker("", selection: $appSettings.updateCheckInterval) {
+                                ForEach(UpdateCheckInterval.allCases, id: \.self) { interval in
+                                    Text(interval.displayName).tag(interval)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
                     }
                     .onChange(of: appSettings.updateChannel) { _, _ in
                         appSettings.save()
+                    }
+                    .onChange(of: appSettings.updateCheckInterval) { _, newValue in
+                        appSettings.save()
+                        if let delegate = NSApp.delegate as? AppDelegate {
+                            delegate.updaterController.updater.updateCheckInterval = TimeInterval(newValue.rawValue)
+                        }
                     }
                 }
 
