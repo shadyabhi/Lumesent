@@ -18,7 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var permissionChecker: PermissionChecker!
     private var notificationServer: NotificationServer!
     private var settingsWindow: NSWindow?
-    private var onboardingWindow: NSWindow?
+
     private var permissionObservation: Any?
     private var cancellables = Set<AnyCancellable>()
     private var iconFlashTimer: Timer?
@@ -107,16 +107,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             name: .lumesentOpenSettings,
             object: nil)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self else { return }
-            if !OnboardingState.hasCompleted {
-                if self.permissionChecker.allGranted {
-                    OnboardingState.markCompleted()
-                } else {
-                    self.presentOnboardingIfNeeded()
-                }
-            } else if !self.permissionChecker.allGranted {
-                self.openSettings()
+        if !permissionChecker.allGranted {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.openSettings()
             }
         }
     }
@@ -127,48 +120,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         } else {
             // Use .regular when a window is visible so the menu bar (Cmd+W/Q) works;
             // fall back to .accessory when all windows are closed.
-            let hasVisibleWindow = (settingsWindow?.isVisible == true) || (onboardingWindow?.isVisible == true)
+            let hasVisibleWindow = settingsWindow?.isVisible == true
             NSApp.setActivationPolicy(hasVisibleWindow ? .regular : .accessory)
         }
     }
 
-    /// Keeps onboarding/settings above other apps until FDA + Accessibility are granted.
+    /// Keeps settings above other apps until FDA + Accessibility are granted.
     private func syncPermissionGatedWindowLevels() {
         let level: NSWindow.Level = permissionChecker.allGranted ? .normal : .floating
         settingsWindow?.level = level
-        onboardingWindow?.level = level
-    }
-
-    private func presentOnboardingIfNeeded() {
-        guard onboardingWindow == nil, !OnboardingState.hasCompleted, !permissionChecker.allGranted else { return }
-        let view = OnboardingView(permissionChecker: permissionChecker) { [weak self] in
-            self?.onboardingWindow?.close()
-            self?.onboardingWindow = nil
-            if self?.permissionChecker.allGranted == false {
-                self?.openSettings()
-            }
-        }
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 400),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Welcome"
-        window.contentView = NSHostingView(rootView: view)
-        window.center()
-        window.isReleasedWhenClosed = false
-        onboardingWindow = window
-        syncPermissionGatedWindowLevels()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        applyActivationPolicyFromSettings()
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidClose(_:)),
-            name: NSWindow.willCloseNotification,
-            object: window)
     }
 
     private func updateMenuBarIcon() {
@@ -385,6 +345,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let logsItem = NSMenuItem(title: "Logs...", action: #selector(openLogs), keyEquivalent: "")
+        logsItem.target = self
+        menu.addItem(logsItem)
+
         let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         checkForUpdatesItem.target = updaterController
         menu.addItem(checkForUpdatesItem)
@@ -394,6 +358,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let quitItem = NSMenuItem(title: "Quit Lumesent", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+    }
+
+    @objc private func openLogs() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-a", "Console"]
+        try? task.run()
     }
 
     @objc private func pauseOneHour() {
@@ -592,7 +563,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         guard let window = notification.object as? NSWindow else { return }
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
         if window === settingsWindow { settingsWindow = nil }
-        if window === onboardingWindow { onboardingWindow = nil }
         applyActivationPolicyFromSettings()
     }
 
