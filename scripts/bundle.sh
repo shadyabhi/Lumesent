@@ -76,6 +76,29 @@ sed "s/__VERSION__/$VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Content
 cp "$REPO_ROOT/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 cp "$REPO_ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
+# ── Embed Sparkle.framework ──
+SPARKLE_FW=$(find "$REPO_ROOT/.build/artifacts" -path "*/macos-*/Sparkle.framework" -type d | head -1)
+if [ -z "$SPARKLE_FW" ]; then
+    echo "bundle.sh: ERROR: Sparkle.framework not found in .build/artifacts" >&2
+    exit 1
+fi
+
+mkdir -p "$APP/Contents/Frameworks"
+cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/Sparkle.framework"
+
+# Ensure executable has rpath to find embedded frameworks
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Lumesent" 2>/dev/null || true
+
+# Sign Sparkle framework components inside-out (required for --deep --strict verification)
+find "$APP/Contents/Frameworks/Sparkle.framework" -name "*.xpc" -type d | while read -r xpc; do
+    codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$xpc"
+done
+for helper in Autoupdate Updater; do
+    helper_path="$APP/Contents/Frameworks/Sparkle.framework/Versions/B/$helper"
+    [ -f "$helper_path" ] && codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$helper_path"
+done
+codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
+
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP/Contents/MacOS/Lumesent"
 codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$APP"
 

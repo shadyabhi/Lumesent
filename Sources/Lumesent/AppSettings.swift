@@ -25,6 +25,25 @@ struct NSEventShim {
     let displayName: String
 }
 
+enum UpdateChannel: String, Codable, CaseIterable {
+    case stable
+    case head
+
+    var displayName: String {
+        switch self {
+        case .stable: "Stable"
+        case .head: "Head (latest main)"
+        }
+    }
+
+    var feedURL: URL {
+        switch self {
+        case .stable: URL(string: "https://github.com/shadyabhi/lumesent/releases/latest/download/appcast.xml")!
+        case .head: URL(string: "https://github.com/shadyabhi/lumesent/releases/download/head/appcast-head.xml")!
+        }
+    }
+}
+
 class AppSettings: ObservableObject {
     @Published var dismissKey: DismissKeyShortcut?
     @Published var showInDock: Bool = false
@@ -32,6 +51,7 @@ class AppSettings: ObservableObject {
     /// When non-nil and in the future, matched alerts are suppressed.
     @Published var pauseAlertsUntil: Date?
     @Published var socketPath: String = FileLocations.defaultSocketPath
+    @Published var updateChannel: UpdateChannel = .stable
 
     private let fileURL: URL
 
@@ -52,7 +72,8 @@ class AppSettings: ObservableObject {
                 showInDock: showInDock,
                 alertPresentation: alertPresentation,
                 pauseAlertsUntil: pauseAlertsUntil,
-                socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath
+                socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
+                updateChannel: updateChannel == .stable ? nil : updateChannel
             ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -74,6 +95,7 @@ class AppSettings: ObservableObject {
         alertPresentation = decoded.alertPresentation
         pauseAlertsUntil = decoded.pauseAlertsUntil
         socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
+        updateChannel = decoded.updateChannel ?? .stable
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -83,5 +105,6 @@ class AppSettings: ObservableObject {
         var alertPresentation: AlertPresentation = .default
         var pauseAlertsUntil: Date?
         var socketPath: String?
+        var updateChannel: UpdateChannel?
     }
 }

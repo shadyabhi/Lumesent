@@ -1943,6 +1943,29 @@ struct SettingsTab: View {
                     }
                 }
 
+                SettingsDetailSectionCard(title: "Updates") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Text("Update channel")
+                                .font(.system(size: 13))
+                            Picker("", selection: $appSettings.updateChannel) {
+                                ForEach(UpdateChannel.allCases, id: \.self) { channel in
+                                    Text(channel.displayName).tag(channel)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
+                        Text("Stable tracks tagged releases. Head tracks the latest build from main.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                    }
+                    .onChange(of: appSettings.updateChannel) { _, _ in
+                        appSettings.save()
+                    }
+                }
+
                 SettingsDetailSectionCard(title: "Dismiss alerts") {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Shortcut to dismiss the full-screen alert. Clicking still works.")

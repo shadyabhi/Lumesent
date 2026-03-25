@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sparkle
 import SwiftUI
 import UserNotifications
 private class HistoryEntryBox: NSObject {
@@ -21,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var permissionObservation: Any?
     private var cancellables = Set<AnyCancellable>()
     private var iconFlashTimer: Timer?
+    private var updaterController: SPUStandardUpdaterController!
 
     private var dedupKey: String?
     private var dedupTime: Date?
@@ -33,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         AppLog.shared.info("app launching, pid=\(ProcessInfo.processInfo.processIdentifier, privacy: .public)")
         ruleStore = RuleStore()
         appSettings = AppSettings()
+        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
         notificationHistory = NotificationHistory()
         filterEngine = FilterEngine(rules: ruleStore.rules)
         permissionChecker = PermissionChecker()
@@ -382,6 +385,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        checkForUpdatesItem.target = updaterController
+        menu.addItem(checkForUpdatesItem)
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Lumesent", action: #selector(quit), keyEquivalent: "q")
@@ -607,5 +614,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             FullScreenAlertWindow.focusSource(ctx)
         }
         completionHandler()
+    }
+}
+
+// MARK: - Sparkle updater delegate
+
+extension AppDelegate: SPUUpdaterDelegate {
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        appSettings.updateChannel.feedURL.absoluteString
     }
 }

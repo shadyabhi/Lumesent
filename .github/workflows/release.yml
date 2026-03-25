@@ -122,6 +122,29 @@ jobs:
           echo "── codesign verification ──"
           codesign --verify --deep --strict --verbose=2 Lumesent.app
 
+      # ── Sign DMG with Sparkle EdDSA for auto-update verification ──
+      - name: Sign DMG with Sparkle EdDSA
+        env:
+          SPARKLE_EDDSA_KEY: ${{ secrets.SPARKLE_EDDSA_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG_FILE="Lumesent-${VERSION}.dmg"
+
+          SIGN_TOOL=$(find .build/artifacts -name "sign_update" -type f | head -1)
+          if [ -z "$SIGN_TOOL" ]; then
+            echo "ERROR: sign_update not found in Sparkle artifacts"
+            exit 1
+          fi
+          chmod +x "$SIGN_TOOL"
+
+          # sign_update outputs: sparkle:edSignature="..." length="..."
+          SPARKLE_SIG=$("$SIGN_TOOL" "$DMG_FILE" --ed-key-file <(echo "$SPARKLE_EDDSA_KEY"))
+          echo "SPARKLE_SIG=$SPARKLE_SIG" >> "$GITHUB_ENV"
+
+          DMG_SIZE=$(stat -f%z "$DMG_FILE")
+          echo "DMG_SIZE=$DMG_SIZE" >> "$GITHUB_ENV"
+          echo "EdDSA signature generated for $DMG_FILE"
+
       # ── Upload DMG to GitHub Release ──
       - name: Create GitHub Release
         env:
@@ -138,8 +161,35 @@ jobs:
 
           echo "Uploading $DMG_FILE to release ${{ github.ref_name }}"
 
+          # Generate appcast.xml and upload both as release assets
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${DMG_FILE}"
+          PUB_DATE=$(date -R)
+
+          cat > appcast.xml << APPCAST_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>Lumesent Updates</title>
+              <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>
+              <item>
+                <title>Version ${VERSION}</title>
+                <pubDate>${PUB_DATE}</pubDate>
+                <enclosure
+                  url="${DMG_URL}"
+                  ${SPARKLE_SIG}
+                  length="${DMG_SIZE}"
+                  type="application/octet-stream" />
+                <sparkle:version>${VERSION}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+              </item>
+            </channel>
+          </rss>
+          APPCAST_EOF
+
           gh release create "${{ github.ref_name }}" \
             "$DMG_FILE" \
+            appcast.xml \
             --draft \
             --title "Lumesent ${VERSION}" \
             --generate-notes
