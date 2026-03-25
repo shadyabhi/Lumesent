@@ -552,7 +552,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 1080, height: 680),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
