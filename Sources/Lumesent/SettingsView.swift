@@ -2295,7 +2295,11 @@ struct LogsTab: View {
         var result = showErrorsOnly ? logStore.entries.filter(\.isError) : logStore.entries
         if !searchText.isEmpty {
             let q = searchText.lowercased()
-            result = result.filter { $0.message.lowercased().contains(q) }
+            result = result.filter {
+                $0.message.lowercased().contains(q)
+                || $0.levelLabel.lowercased().contains(q)
+                || Self.timeFormatter.string(from: $0.date).contains(q)
+            }
         }
         return result
     }

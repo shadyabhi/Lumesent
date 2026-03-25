@@ -2,10 +2,13 @@ import Foundation
 import OSLog
 
 struct LogEntry: Identifiable {
-    let id = UUID()
     let date: Date
     let level: OSLogEntryLog.Level
     let message: String
+
+    var id: String {
+        "\(date.timeIntervalSince1970)-\(level.rawValue)-\(message.hashValue)"
+    }
 
     var levelLabel: String {
         switch level {
@@ -28,17 +31,11 @@ struct LogEntry: Identifiable {
 final class LogStore: ObservableObject {
     @Published private(set) var entries: [LogEntry] = []
     @Published private(set) var isLoading = false
-    @Published var filterLevel: OSLogEntryLog.Level? = nil
     @Published var timeWindow: TimeInterval = 3600  // seconds to look back
 
     private let subsystem = Bundle.main.bundleIdentifier ?? "com.shadyabhi.Lumesent"
     private var refreshTimer: Timer?
     private var fetchTask: Task<Void, Never>?
-
-    var filteredEntries: [LogEntry] {
-        guard let filterLevel else { return entries }
-        return entries.filter { $0.level == filterLevel }
-    }
 
     func start() {
         fetch()
