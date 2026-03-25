@@ -96,26 +96,15 @@ jobs:
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/head/${DMG_FILE}"
           PUB_DATE=$(date -R)
 
-          cat > appcast-head.xml <<APPCAST_EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>Lumesent Updates (Head)</title>
-    <link>https://github.com/${{ github.repository }}/releases/download/head/appcast-head.xml</link>
-    <item>
-      <title>Head (${SHORT_SHA})</title>
-      <pubDate>${PUB_DATE}</pubDate>
-      <enclosure
-        url="${DMG_URL}"
-        ${SPARKLE_SIG}
-        type="application/octet-stream" />
-      <sparkle:version>head-${SHORT_SHA}</sparkle:version>
-      <sparkle:shortVersionString>head-${SHORT_SHA}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-    </item>
-  </channel>
-</rss>
-APPCAST_EOF
+          scripts/generate-appcast.sh \
+            appcast-head.xml \
+            "Lumesent Updates (Head)" \
+            "https://github.com/${{ github.repository }}/releases/download/head/appcast-head.xml" \
+            "Head (${SHORT_SHA})" \
+            "head-${SHORT_SHA}" \
+            "$DMG_URL" \
+            "$SPARKLE_SIG" \
+            "$PUB_DATE"
 
           # Delete existing head release (if any), then recreate
           gh release delete head --yes --cleanup-tag 2>/dev/null || true
