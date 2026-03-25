@@ -35,7 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         AppLog.shared.info("app launching, pid=\(ProcessInfo.processInfo.processIdentifier, privacy: .public)")
         ruleStore = RuleStore()
         appSettings = AppSettings()
-        updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
+        updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
         updaterController.updater.updateCheckInterval = TimeInterval(appSettings.updateCheckInterval.rawValue)
         DispatchQueue.main.async { [weak self] in
             try? self?.updaterController.updater.start()
@@ -353,8 +353,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         logsItem.target = self
         menu.addItem(logsItem)
 
-        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
-        checkForUpdatesItem.target = updaterController
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
+        checkForUpdatesItem.target = self
         menu.addItem(checkForUpdatesItem)
 
         menu.addItem(.separator())
@@ -369,6 +369,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-a", "Console"]
         try? task.run()
+    }
+
+    @objc private func checkForUpdates(_ sender: Any?) {
+        // Menu bar apps (LSUIElement) need to temporarily become a regular app
+        // so that Sparkle's update dialog appears in front of other windows.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        updaterController.checkForUpdates(sender)
+
+        // Revert to accessory (menu bar only) after a delay so the dialog has time to appear
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if !self.appSettings.showInDock {
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
     }
 
     @objc private func pauseOneHour() {
@@ -607,5 +622,22 @@ extension AppDelegate: SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
         AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
+    }
+}
+
+// MARK: - Sparkle user driver delegate
+
+extension AppDelegate: SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        if !appSettings.showInDock {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 }
