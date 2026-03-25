@@ -100,7 +100,7 @@ if subcommand == "send" {
           --title <text>        (required) Notification title
           --subtitle <text>     Notification subtitle
           --body <text>         Notification body
-          --app-name <text>     App name shown in the alert (default: "External")
+          --app-name <text>     App name shown in the alert (auto-detected from terminal/parent process)
           --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
           --alert-type <type>   "fullscreen" (default) or "notification" (native macOS notification)
           --source-app <id>     Bundle ID of the app to focus on dismiss (e.g. "com.apple.Safari")
@@ -131,16 +131,40 @@ if subcommand == "send" {
     }
 
     let noFocusSource = args.contains("--no-focus-source")
+    let sourceContext = SourceContext.detect()
+
+    // Auto-detect app name when --app-name is not provided:
+    // 1. Terminal app name from sourceContext (e.g. "iTerm2", "Terminal")
+    // 2. Parent process name (e.g. "zsh", "python3")
+    // 3. Falls back to "External" via resolvedAppName
+    var appName = flagValue("--app-name")
+    if appName == nil {
+        if let bundleId = sourceContext?.terminalAppBundleId,
+           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            let bundle = Bundle(url: appURL)
+            appName = bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String
+                ?? bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+                ?? appURL.deletingPathExtension().lastPathComponent
+        }
+        if appName == nil {
+            let bufSize: Int = 256
+            var name = [CChar](repeating: 0, count: bufSize)
+            let ppid = getppid()
+            if proc_name(ppid, &name, UInt32(bufSize)) > 0 {
+                appName = String(cString: name)
+            }
+        }
+    }
 
     let payload = ExternalNotification(
         title: title,
         subtitle: flagValue("--subtitle"),
         body: flagValue("--body"),
-        appName: flagValue("--app-name"),
+        appName: appName,
         displayMode: flagValue("--display-mode"),
         alertType: flagValue("--alert-type"),
-        sourceContext: SourceContext.detect(),
         focusSource: noFocusSource ? false : nil,
+        sourceContext: SourceContext.detect(),
         sourceApp: flagValue("--source-app")
     )
 
