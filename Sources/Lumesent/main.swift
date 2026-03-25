@@ -103,12 +103,14 @@ if subcommand == "send" {
           --app-name <text>     App name shown in the alert (auto-detected from terminal/parent process)
           --display-mode <mode> "sticky" (stays until dismissed) or "timed" (auto-dismiss)
           --alert-type <type>   "fullscreen" (default) or "notification" (native macOS notification)
+          --source-app <id>     Bundle ID of the app to focus on dismiss (e.g. "com.apple.Safari")
           --no-focus-source     Don't focus the source terminal after alert dismiss
 
         EXAMPLES
           Lumesent send --title "Build failed" --body "exit code 1"
           Lumesent send --title "Deploy complete" --app-name "CI" --display-mode sticky
           Lumesent send --title "Done!" --alert-type notification
+          Lumesent send --title "Page loaded" --source-app com.apple.Safari
 
         Bypasses filter rules — always displayed (unless paused).
         The app must already be running.
@@ -161,8 +163,9 @@ if subcommand == "send" {
         appName: appName,
         displayMode: flagValue("--display-mode"),
         alertType: flagValue("--alert-type"),
-        sourceContext: sourceContext,
-        focusSource: noFocusSource ? false : nil
+        focusSource: noFocusSource ? false : nil,
+        sourceContext: SourceContext.detect(),
+        sourceApp: flagValue("--source-app")
     )
 
     let data: Data
