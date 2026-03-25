@@ -148,7 +148,7 @@ struct SettingsView: View {
                 .toolbar(.hidden)
             }
         }
-        .frame(minWidth: 720, minHeight: 440)
+        .frame(minWidth: 860, minHeight: 540)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(NotificationCenter.default.publisher(for: .lumesentNavigateToTab)) { notification in
             if let tab = notification.object as? String {
@@ -1418,6 +1418,24 @@ struct QuickRuleCreator: View {
     @State private var useBody = false
     @State private var label = ""
 
+    @State private var editApp: String
+    @State private var editTitle: String
+    @State private var editSubtitle: String
+    @State private var editBody: String
+
+    @State private var showingConfirmation = false
+
+    init(entry: HistoryEntry, ruleStore: RuleStore, onRulesChanged: @escaping ([FilterRule]) -> Void, onDismiss: @escaping () -> Void) {
+        self.entry = entry
+        self.ruleStore = ruleStore
+        self.onRulesChanged = onRulesChanged
+        self.onDismiss = onDismiss
+        self._editApp = State(initialValue: entry.appIdentifier)
+        self._editTitle = State(initialValue: entry.title)
+        self._editSubtitle = State(initialValue: entry.subtitle)
+        self._editBody = State(initialValue: entry.body)
+    }
+
     private var allLabels: [String] {
         Set(ruleStore.rules.compactMap { $0.label.isEmpty ? nil : $0.label }).sorted()
     }
@@ -1428,63 +1446,19 @@ struct QuickRuleCreator: View {
                 .font(.system(size: 13, weight: .semibold))
 
             SettingsDetailSectionCard(title: "Match") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle(isOn: $useApp) {
-                        HStack {
-                            Text("App:")
-                                .font(.system(size: 12, weight: .medium))
-                                .frame(width: 40, alignment: .trailing)
-                            Text(entry.appIdentifier)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .toggleStyle(.checkbox)
+                VStack(alignment: .leading, spacing: 8) {
+                    quickRuleField(label: "App:", isOn: $useApp, text: $editApp)
 
                     if !entry.title.isEmpty {
-                        Toggle(isOn: $useTitle) {
-                            HStack {
-                                Text("Title:")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .frame(width: 40, alignment: .trailing)
-                                Text(entry.title)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
+                        quickRuleField(label: "Title:", isOn: $useTitle, text: $editTitle)
                     }
 
                     if !entry.subtitle.isEmpty {
-                        Toggle(isOn: $useSubtitle) {
-                            HStack {
-                                Text("Subtitle:")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .frame(width: 40, alignment: .trailing)
-                                Text(entry.subtitle)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
+                        quickRuleField(label: "Subtitle:", isOn: $useSubtitle, text: $editSubtitle)
                     }
 
                     if !entry.body.isEmpty {
-                        Toggle(isOn: $useBody) {
-                            HStack {
-                                Text("Body:")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .frame(width: 40, alignment: .trailing)
-                                Text(entry.body)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
+                        quickRuleField(label: "Body:", isOn: $useBody, text: $editBody)
                     }
                 }
             }
@@ -1500,7 +1474,7 @@ struct QuickRuleCreator: View {
                     Button("Cancel") { onDismiss() }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                    Button("Create") { createRule() }
+                    Button("Create") { showingConfirmation = true }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .disabled(!useApp && !useTitle && !useSubtitle && !useBody)
@@ -1508,16 +1482,50 @@ struct QuickRuleCreator: View {
                 .padding(.top, 10)
             }
         }
-        .padding(14)
-        .frame(width: 340)
+        .padding(16)
+        .frame(width: 420)
+        .alert("Create Rule?", isPresented: $showingConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Create") { createRule() }
+        } message: {
+            Text("This will create a rule matching:\n\(confirmationSummary)")
+        }
+    }
+
+    @ViewBuilder
+    private func quickRuleField(label: String, isOn: Binding<Bool>, text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Toggle("", isOn: isOn)
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 52, alignment: .trailing)
+
+            TextField("", text: text)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .disabled(!isOn.wrappedValue)
+                .opacity(isOn.wrappedValue ? 1.0 : 0.5)
+        }
+    }
+
+    private var confirmationSummary: String {
+        var parts: [String] = []
+        if useApp { parts.append("App: \(editApp)") }
+        if useTitle { parts.append("Title: \(editTitle)") }
+        if useSubtitle { parts.append("Subtitle: \(editSubtitle)") }
+        if useBody { parts.append("Body: \(editBody)") }
+        return parts.joined(separator: "\n")
     }
 
     private func createRule() {
         let rule = FilterRule(
-            appIdentifier: useApp ? entry.appIdentifier : "",
-            titleContains: useTitle ? entry.title : "",
-            subtitleContains: useSubtitle ? entry.subtitle : "",
-            bodyContains: useBody ? entry.body : "",
+            appIdentifier: useApp ? editApp : "",
+            titleContains: useTitle ? editTitle : "",
+            subtitleContains: useSubtitle ? editSubtitle : "",
+            bodyContains: useBody ? editBody : "",
             label: label
         )
         ruleStore.rules.append(rule)

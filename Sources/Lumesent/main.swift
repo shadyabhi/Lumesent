@@ -163,8 +163,8 @@ if subcommand == "send" {
         appName: appName,
         displayMode: flagValue("--display-mode"),
         alertType: flagValue("--alert-type"),
-        focusSource: noFocusSource ? false : nil,
         sourceContext: SourceContext.detect(),
+        focusSource: noFocusSource ? false : nil,
         sourceApp: flagValue("--source-app")
     )
 
