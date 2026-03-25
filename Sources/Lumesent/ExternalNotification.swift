@@ -78,6 +78,7 @@ struct ExternalNotification: Codable {
     var alertType: String?
     var sourceContext: SourceContext?
     var focusSource: Bool?
+    var sourceApp: String?
 
     var resolvedSubtitle: String { subtitle ?? "" }
     var resolvedBody: String { body ?? "" }

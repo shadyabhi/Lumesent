@@ -29,6 +29,11 @@ struct NotificationRecord: Identifiable {
 
     static func fromExternal(_ ext: ExternalNotification) -> NotificationRecord {
         externalIdCounter -= 1
+        var ctx = ext.sourceContext
+        if let sourceApp = ext.sourceApp {
+            if ctx == nil { ctx = SourceContext() }
+            ctx?.terminalAppBundleId = sourceApp
+        }
         return NotificationRecord(
             id: externalIdCounter,
             appIdentifier: "external",
@@ -37,7 +42,7 @@ struct NotificationRecord: Identifiable {
             body: ext.resolvedBody,
             deliveredDate: Date(),
             overrideAppName: ext.resolvedAppName,
-            sourceContext: ext.sourceContext
+            sourceContext: ctx
         )
     }
 
