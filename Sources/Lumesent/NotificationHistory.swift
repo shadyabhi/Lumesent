@@ -60,7 +60,7 @@ class NotificationHistory: ObservableObject {
             title: notification.title,
             subtitle: notification.subtitle,
             body: notification.body,
-            date: notification.deliveredDate,
+            date: min(notification.deliveredDate, Date()),
             matched: matched,
             matchedRuleId: matchedRuleId,
             cooldownSuppressed: cooldownSuppressed

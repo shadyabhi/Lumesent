@@ -2536,7 +2536,7 @@ struct LogsTab: View {
 // MARK: - Helpers
 
 func relativeTime(_ date: Date) -> String {
-    let seconds = Int(-date.timeIntervalSinceNow)
+    let seconds = max(0, Int(-date.timeIntervalSinceNow))
     if seconds < 60 { return "just now" }
     let minutes = seconds / 60
     if minutes < 60 { return "\(minutes)m ago" }

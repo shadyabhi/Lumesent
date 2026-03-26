@@ -62,6 +62,18 @@ SettingsView is the largest file (~1900 lines): sidebar-based rules editor, unma
 
 The app requires **Full Disk Access** (notification DB readability) and **Accessibility** (AXObserver + hotkeys). `PermissionChecker` polls every 1s until both are granted. Missing permissions trigger onboarding dialogs at startup.
 
+## Commit Format
+
+```
+<component>: <describe feature>
+
+<why we did it, what we did>
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+Component is a short label for the area of the codebase (e.g. `monitor`, `filter`, `alerts`, `settings`, `cli`, `build`, `history`). The first line is a concise summary; the body explains motivation and approach.
+
 ## Build & Signing
 
 `scripts/bundle.sh` creates the .app structure and resolves signing identity (prefers Apple Development > Developer ID > ad-hoc). Version comes from the git hash (locally) or the tag name (CI), substituted into Info.plist at build time.
