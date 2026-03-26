@@ -1316,7 +1316,7 @@ struct HistoryRow: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if entry.sourceVisibleSuppressed {
-                        Text("window already active")
+                        Text("fullscreen downgraded, active window")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.blue)
                             .padding(.horizontal, 5)
@@ -1913,9 +1913,9 @@ struct SettingsTab: View {
                                 .accessibilityLabel("Suppress alerts when source pane is visible")
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Suppress alerts when source is visible")
+                                Text("Downgrade alerts when source is visible")
                                     .font(.system(size: 13))
-                                Text("Skip full-screen alerts when the tmux pane that sent the notification is already active and its terminal app is frontmost.")
+                                Text("Downgrade full-screen alerts to native notifications when the tmux pane that sent the notification is already active and its terminal app is frontmost.")
                                     .font(.system(size: 11))
                                     .foregroundStyle(captionColor)
                                     .fixedSize(horizontal: false, vertical: true)
