@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 struct SourceContext: Codable {
     var tmuxSession: String?
@@ -45,7 +45,28 @@ struct SourceContext: Codable {
         return hasAnything ? ctx : nil
     }
 
-    private static func shellOutput(_ command: String) -> String? {
+    /// Returns true if the terminal app is frontmost AND the tmux pane is active in its active window.
+    /// Must be called from a background thread (runs shell commands synchronously).
+    func isSourcePaneVisible() -> Bool {
+        dispatchPrecondition(condition: .notOnQueue(.main))
+
+        guard let bundleId = terminalAppBundleId else { return false }
+
+        let isFrontmost: Bool = DispatchQueue.main.sync {
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleId
+        }
+        guard isFrontmost else { return false }
+
+        guard hasTmux, let pane = tmuxPane else {
+            return true
+        }
+
+        let output = SourceContext.shellOutput("tmux display-message -p -t \(pane) '#{pane_active} #{window_active}'")
+        let parts = output?.split(separator: " ")
+        return parts?.count == 2 && parts?[0] == "1" && parts?[1] == "1"
+    }
+
+    static func shellOutput(_ command: String) -> String? {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
         proc.arguments = ["-c", command]

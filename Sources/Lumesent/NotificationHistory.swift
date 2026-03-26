@@ -11,8 +11,9 @@ struct HistoryEntry: Codable, Identifiable {
     var matched: Bool = false
     var matchedRuleId: UUID? = nil
     var cooldownSuppressed: Bool = false
+    var sourceVisibleSuppressed: Bool = false
 
-    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false) {
+    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
         self.id = UUID()
         self.appIdentifier = appIdentifier
         self.appName = appName
@@ -23,6 +24,7 @@ struct HistoryEntry: Codable, Identifiable {
         self.matched = matched
         self.matchedRuleId = matchedRuleId
         self.cooldownSuppressed = cooldownSuppressed
+        self.sourceVisibleSuppressed = sourceVisibleSuppressed
     }
 
     init(from decoder: Decoder) throws {
@@ -37,6 +39,7 @@ struct HistoryEntry: Codable, Identifiable {
         matched = try c.decodeIfPresent(Bool.self, forKey: .matched) ?? false
         matchedRuleId = try c.decodeIfPresent(UUID.self, forKey: .matchedRuleId)
         cooldownSuppressed = try c.decodeIfPresent(Bool.self, forKey: .cooldownSuppressed) ?? false
+        sourceVisibleSuppressed = try c.decodeIfPresent(Bool.self, forKey: .sourceVisibleSuppressed) ?? false
     }
 }
 
@@ -53,7 +56,7 @@ class NotificationHistory: ObservableObject {
         load()
     }
 
-    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false) {
+    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
         let entry = HistoryEntry(
             appIdentifier: notification.appIdentifier,
             appName: notification.appName,
@@ -63,7 +66,8 @@ class NotificationHistory: ObservableObject {
             date: min(notification.deliveredDate, Date()),
             matched: matched,
             matchedRuleId: matchedRuleId,
-            cooldownSuppressed: cooldownSuppressed
+            cooldownSuppressed: cooldownSuppressed,
+            sourceVisibleSuppressed: sourceVisibleSuppressed
         )
         AppLog.shared.info("history: recording app=\(notification.appName, privacy: .public) (\(notification.appIdentifier, privacy: .public)) title=\(notification.title, privacy: .public) subtitle=\(notification.subtitle, privacy: .public) time=\(notification.deliveredDate.description, privacy: .public) matched=\(matched, privacy: .public)")
         entries.append(entry)

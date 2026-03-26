@@ -436,17 +436,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private func handleExternalNotification(_ ext: ExternalNotification) {
         let record = NotificationRecord.fromExternal(ext)
         AppLog.shared.info("external notification: title=\(record.title, privacy: .public) app=\(record.appName, privacy: .public) alertType=\(ext.alertType ?? "fullscreen", privacy: .public) displayMode=\(String(describing: ext.displayMode), privacy: .public)")
-        notificationHistory.record(record, matched: true, matchedRuleId: nil)
         guard !appSettings.isPauseActive else {
+            notificationHistory.record(record, matched: true, matchedRuleId: nil)
             AppLog.shared.debug("skipped external alert (paused)")
             return
         }
         let focus = ext.resolvedFocusSource
+
+        if appSettings.suppressWhenSourceVisible, let ctx = record.sourceContext {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                let visible = ctx.isSourcePaneVisible()
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if visible {
+                        AppLog.shared.info("suppressed external alert (source pane visible): title=\(record.title, privacy: .public) pane=\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
+                        self.notificationHistory.record(record, matched: true, matchedRuleId: nil, sourceVisibleSuppressed: true)
+                        return
+                    }
+                    self.notificationHistory.record(record, matched: true, matchedRuleId: nil)
+                    self.presentExternalAlert(ext, record: record, focusSource: focus)
+                }
+            }
+        } else {
+            notificationHistory.record(record, matched: true, matchedRuleId: nil)
+            presentExternalAlert(ext, record: record, focusSource: focus)
+        }
+    }
+
+    private func presentExternalAlert(_ ext: ExternalNotification, record: NotificationRecord, focusSource: Bool) {
         switch ext.resolvedAlertType {
         case .notification:
-            postNativeNotification(record, focusSourceOnDismiss: focus)
+            postNativeNotification(record, focusSourceOnDismiss: focusSource)
         case .fullscreen:
-            presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focus)
+            presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focusSource)
         }
     }
 

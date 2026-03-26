@@ -1315,7 +1315,15 @@ struct HistoryRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if entry.cooldownSuppressed {
+                    if entry.sourceVisibleSuppressed {
+                        Text("window already active")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.blue.opacity(0.1))
+                            .clipShape(Capsule())
+                    } else if entry.cooldownSuppressed {
                         Text("cooldown")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.orange)
@@ -1893,6 +1901,28 @@ struct SettingsTab: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .onChange(of: appSettings.showInDock) { _, _ in
+                            appSettings.save()
+                        }
+
+                        Divider()
+
+                        HStack(alignment: .top, spacing: 12) {
+                            Toggle("", isOn: $appSettings.suppressWhenSourceVisible)
+                                .labelsHidden()
+                                .toggleStyle(.checkbox)
+                                .accessibilityLabel("Suppress alerts when source pane is visible")
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Suppress alerts when source is visible")
+                                    .font(.system(size: 13))
+                                Text("Skip full-screen alerts when the tmux pane that sent the notification is already active and its terminal app is frontmost.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(captionColor)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .onChange(of: appSettings.suppressWhenSourceVisible) { _, _ in
                             appSettings.save()
                         }
 
