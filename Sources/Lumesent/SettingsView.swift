@@ -2268,7 +2268,8 @@ struct LabelSuggestingField: View {
                             }
                         }
                     }
-                    .onChange(of: draft) { _, _ in
+                    .onChange(of: draft) { _, newDraft in
+                        text = newDraft
                         showSuggestions = isFocused
                     }
             }
