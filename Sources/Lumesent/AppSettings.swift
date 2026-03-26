@@ -25,6 +25,20 @@ struct NSEventShim {
     let displayName: String
 }
 
+enum ActiveWindowBehavior: String, Codable, CaseIterable {
+    case disabled
+    case downgrade
+    case suppress
+
+    var displayName: String {
+        switch self {
+        case .disabled: "Disabled"
+        case .downgrade: "Downgrade to native notification"
+        case .suppress: "Suppress entirely"
+        }
+    }
+}
+
 enum UpdateChannel: String, Codable, CaseIterable {
     case stable
     case head
@@ -75,7 +89,7 @@ class AppSettings: ObservableObject {
     @Published var socketPath: String = FileLocations.defaultSocketPath
     @Published var updateChannel: UpdateChannel = UpdateChannel.defaultForCurrentBuild
     @Published var updateCheckInterval: UpdateCheckInterval = .everyHour
-    @Published var suppressWhenSourceVisible: Bool = true
+    @Published var activeWindowBehavior: ActiveWindowBehavior = .downgrade
 
     private let fileURL: URL
 
@@ -99,7 +113,7 @@ class AppSettings: ObservableObject {
                 socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
                 updateChannel: updateChannel == .stable ? nil : updateChannel,
                 updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval,
-                suppressWhenSourceVisible: suppressWhenSourceVisible ? nil : suppressWhenSourceVisible
+                activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior
             ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -123,7 +137,7 @@ class AppSettings: ObservableObject {
         socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
         updateChannel = decoded.updateChannel ?? UpdateChannel.defaultForCurrentBuild
         updateCheckInterval = decoded.updateCheckInterval ?? .everyHour
-        suppressWhenSourceVisible = decoded.suppressWhenSourceVisible ?? true
+        activeWindowBehavior = decoded.activeWindowBehavior ?? .downgrade
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -135,6 +149,6 @@ class AppSettings: ObservableObject {
         var socketPath: String?
         var updateChannel: UpdateChannel?
         var updateCheckInterval: UpdateCheckInterval?
-        var suppressWhenSourceVisible: Bool?
+        var activeWindowBehavior: ActiveWindowBehavior?
     }
 }

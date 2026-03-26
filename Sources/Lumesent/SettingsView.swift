@@ -1880,6 +1880,25 @@ struct SettingsTab: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.radioGroup)
+
+                        Divider()
+
+                        Text("When source window is active")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Controls what happens to full-screen alerts when the tmux pane that sent the notification is already active and its terminal app is frontmost.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Picker("", selection: $appSettings.activeWindowBehavior) {
+                            ForEach(ActiveWindowBehavior.allCases, id: \.self) { behavior in
+                                Text(behavior.displayName).tag(behavior)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.radioGroup)
+                        .onChange(of: appSettings.activeWindowBehavior) { _, _ in
+                            appSettings.save()
+                        }
                     }
                 }
 
@@ -1901,28 +1920,6 @@ struct SettingsTab: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .onChange(of: appSettings.showInDock) { _, _ in
-                            appSettings.save()
-                        }
-
-                        Divider()
-
-                        HStack(alignment: .top, spacing: 12) {
-                            Toggle("", isOn: $appSettings.suppressWhenSourceVisible)
-                                .labelsHidden()
-                                .toggleStyle(.checkbox)
-                                .accessibilityLabel("Suppress alerts when source pane is visible")
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Downgrade alerts when source is visible")
-                                    .font(.system(size: 13))
-                                Text("Downgrade full-screen alerts to native notifications when the tmux pane that sent the notification is already active and its terminal app is frontmost.")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(captionColor)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .onChange(of: appSettings.suppressWhenSourceVisible) { _, _ in
                             appSettings.save()
                         }
 

@@ -443,15 +443,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         }
         let focus = ext.resolvedFocusSource
 
-        if appSettings.suppressWhenSourceVisible, let ctx = record.sourceContext {
+        let behavior = appSettings.activeWindowBehavior
+        if behavior != .disabled, let ctx = record.sourceContext {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let visible = ctx.isSourcePaneVisible()
                 DispatchQueue.main.async {
                     guard let self else { return }
                     if visible {
-                        AppLog.shared.info("downgraded external alert to native (source pane visible): title=\(record.title, privacy: .public) pane=\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
+                        AppLog.shared.info("\(behavior == .suppress ? "suppressed" : "downgraded", privacy: .public) external alert (source pane visible): title=\(record.title, privacy: .public) pane=\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
                         self.notificationHistory.record(record, matched: true, matchedRuleId: nil, sourceVisibleSuppressed: true)
-                        self.postNativeNotification(record, focusSourceOnDismiss: focus)
+                        if behavior == .downgrade {
+                            self.postNativeNotification(record, focusSourceOnDismiss: focus)
+                        }
                         return
                     }
                     self.notificationHistory.record(record, matched: true, matchedRuleId: nil)
