@@ -20,32 +20,14 @@ final class NotificationServer {
             return
         }
 
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let pathFieldLen = MemoryLayout.size(ofValue: addr.sun_path)
-        let pathMaxCopy = pathFieldLen - 1
-        guard socketPath.utf8.count <= pathMaxCopy else {
+        guard var (addr, addrLen) = makeUnixSocketAddress(socketPath) else {
             AppLog.shared.error("socket path too long for sockaddr_un")
             close(serverFD)
             serverFD = -1
             return
         }
-        socketPath.withCString { ptr in
-            withUnsafeMutableBytes(of: &addr.sun_path) { rawBuf in
-                let pathBuf = rawBuf.baseAddress!.assumingMemoryBound(to: CChar.self)
-                strncpy(pathBuf, ptr, pathMaxCopy)
-            }
-        }
-        // BSD: address length is prefix + pathname bytes (SUN_LEN), not sizeof(sockaddr_un).
-        let sunPathOffset = Int(MemoryLayout.offset(of: \sockaddr_un.sun_path)!)
-        let addrLen = socklen_t(sunPathOffset + socketPath.utf8.count)
-        addr.sun_len = UInt8(addrLen)
 
-        let bindResult = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                bind(serverFD, sockPtr, addrLen)
-            }
-        }
+        let bindResult = bindUnixSocket(serverFD, address: &addr, length: addrLen)
         guard bindResult == 0 else {
             AppLog.shared.error("failed to bind socket: \(errno, privacy: .public)")
             close(serverFD)

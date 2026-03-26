@@ -221,18 +221,8 @@ final class FullScreenAlertWindow {
             if ctx.hasTmux, let session = ctx.tmuxSession, let window = ctx.tmuxWindow, let pane = ctx.tmuxPane {
                 let cmd = "tmux select-window -t \(session):\(window) && tmux select-pane -t \(pane)"
                 log.notice("focusSource: running: \(cmd, privacy: .public)")
-                let proc = Process()
-                proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-                proc.arguments = ["-c", cmd]
-                proc.standardOutput = FileHandle.nullDevice
-                proc.standardError = FileHandle.nullDevice
-                do {
-                    try proc.run()
-                    proc.waitUntilExit()
-                    log.notice("focusSource: tmux exit code=\(proc.terminationStatus, privacy: .public)")
-                } catch {
-                    log.notice("focusSource error: tmux failed: \(error.localizedDescription, privacy: .public)")
-                }
+                let status = SourceContext.shellRun(cmd)
+                log.notice("focusSource: tmux exit code=\(status, privacy: .public)")
             }
 
             if let bundleId = ctx.terminalAppBundleId,

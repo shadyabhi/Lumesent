@@ -26,6 +26,11 @@ if subcommand == "--help" || subcommand == "-h" {
     exit(0)
 }
 
+func flagValue(_ flag: String) -> String? {
+    guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
+    return args[idx + 1]
+}
+
 // ── Lumesent logs ──
 if subcommand == "logs" {
     if args.contains("--help") || args.contains("-h") {
@@ -47,11 +52,6 @@ if subcommand == "logs" {
         """
         print(help)
         exit(0)
-    }
-
-    func flagValue(_ flag: String) -> String? {
-        guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
-        return args[idx + 1]
     }
 
     let last = flagValue("--last") ?? "1h"
@@ -119,11 +119,6 @@ if subcommand == "send" {
         exit(0)
     }
 
-    func flagValue(_ flag: String) -> String? {
-        guard let idx = args.firstIndex(of: flag), idx + 1 < args.count else { return nil }
-        return args[idx + 1]
-    }
-
     guard let title = flagValue("--title") else {
         fputs("error: --title is required\n", stderr)
         fputs("usage: Lumesent send --title \"…\" [--subtitle \"…\"] [--body \"…\"] [--app-name \"…\"] [--display-mode sticky|timed] [--alert-type fullscreen|notification]\n", stderr)
@@ -180,24 +175,15 @@ if subcommand == "send" {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { fputs("error: cannot create socket\n", stderr); exit(1) }
 
-    var addr = sockaddr_un()
-    addr.sun_family = sa_family_t(AF_UNIX)
-    let pathMaxLen = MemoryLayout.size(ofValue: addr.sun_path) - 1
-    withUnsafeMutablePointer(to: &addr) { addrPtr in
-        socketPath.withCString { cstr in
-            let sunPath = UnsafeMutableRawPointer(addrPtr).advanced(by: MemoryLayout.offset(of: \sockaddr_un.sun_path)!)
-            strncpy(sunPath.assumingMemoryBound(to: CChar.self), cstr, pathMaxLen)
-        }
+    guard let socketAddr = makeUnixSocketAddress(socketPath) else {
+        fputs("error: socket path too long\n", stderr)
+        close(fd)
+        exit(1)
     }
-    let sunPathOffset = Int(MemoryLayout.offset(of: \sockaddr_un.sun_path)!)
-    let addrLen = socklen_t(sunPathOffset + socketPath.utf8.count)
-    addr.sun_len = UInt8(addrLen)
+    var addr = socketAddr.0
+    let addrLen = socketAddr.1
 
-    let connectResult = withUnsafePointer(to: &addr) { ptr in
-        ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-            connect(fd, sockPtr, addrLen)
-        }
-    }
+    let connectResult = connectUnixSocket(fd, address: &addr, length: addrLen)
     guard connectResult == 0 else {
         fputs("error: cannot connect to Lumesent — is it running?\n", stderr)
         close(fd)

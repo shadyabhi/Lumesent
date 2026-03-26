@@ -83,6 +83,23 @@ struct SourceContext: Codable {
             return nil
         }
     }
+
+    /// Runs a shell command, discarding output. Returns the exit status.
+    @discardableResult
+    static func shellRun(_ command: String) -> Int32 {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = ["-c", command]
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            return proc.terminationStatus
+        } catch {
+            return -1
+        }
+    }
 }
 
 enum ExternalAlertType: String, Codable {

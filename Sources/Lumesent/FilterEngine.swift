@@ -19,30 +19,9 @@ class FilterEngine {
     }
 
     private func matchesRule(_ n: NotificationRecord, _ r: FilterRule) -> Bool {
-        // All non-empty fields must match (AND logic)
-        if !r.appIdentifier.isEmpty {
-            guard r.appOperator.matches(n.appIdentifier, r.appIdentifier) else {
-                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): app mismatch — op=\(r.appOperator.rawValue, privacy: .public) pattern=\(r.appIdentifier, privacy: .public) got=\(n.appIdentifier, privacy: .public)")
-                return false
-            }
-        }
-        if !r.titleContains.isEmpty {
-            guard r.titleOperator.matches(n.title, r.titleContains) else {
-                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): title mismatch — op=\(r.titleOperator.rawValue, privacy: .public) pattern=\(r.titleContains, privacy: .public) actual=\(n.title, privacy: .public)")
-                return false
-            }
-        }
-        if !r.subtitleContains.isEmpty {
-            guard r.subtitleOperator.matches(n.subtitle, r.subtitleContains) else {
-                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): subtitle mismatch — op=\(r.subtitleOperator.rawValue, privacy: .public) pattern=\(r.subtitleContains, privacy: .public) actual=\(n.subtitle, privacy: .public)")
-                return false
-            }
-        }
-        if !r.bodyContains.isEmpty {
-            guard r.bodyOperator.matches(n.body, r.bodyContains) else {
-                AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): body mismatch — op=\(r.bodyOperator.rawValue, privacy: .public) pattern=\(r.bodyContains, privacy: .public)")
-                return false
-            }
+        guard r.matchesFields(of: n) else {
+            AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): no match for app=\(n.appIdentifier, privacy: .public) title=\(n.title, privacy: .public)")
+            return false
         }
         return true
     }

@@ -80,8 +80,12 @@ final class LogStore: ObservableObject {
 
                 let result = newEntries
                 await MainActor.run { [weak self] in
-                    self?.entries = result
-                    self?.isLoading = false
+                    guard let self else { return }
+                    // Only update if entries actually changed to avoid no-op SwiftUI re-renders
+                    if result.count != self.entries.count || result.last?.date != self.entries.last?.date {
+                        self.entries = result
+                    }
+                    self.isLoading = false
                 }
             } catch {
                 await MainActor.run { [weak self] in

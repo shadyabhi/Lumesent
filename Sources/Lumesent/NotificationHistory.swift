@@ -50,6 +50,7 @@ class NotificationHistory: ObservableObject {
     static let storedEntryLimit = 1000
     private static let maxEntries = storedEntryLimit
     private let fileURL: URL
+    private var saveTimer: Timer?
 
     init() {
         fileURL = FileLocations.appSupportDirectory.appendingPathComponent("history.json")
@@ -76,12 +77,22 @@ class NotificationHistory: ObservableObject {
             entries = Array(entries.suffix(Self.maxEntries))
         }
 
-        save()
+        debouncedSave()
     }
 
     func clearAll() {
         entries.removeAll()
+        saveTimer?.invalidate()
+        saveTimer = nil
         save()
+    }
+
+    /// Coalesces rapid save calls into a single write after 0.5s of inactivity.
+    private func debouncedSave() {
+        saveTimer?.invalidate()
+        saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            self?.save()
+        }
     }
 
     /// Most recent matched notifications (any rule), for menu previews.

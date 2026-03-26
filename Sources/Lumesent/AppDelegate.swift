@@ -24,12 +24,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var iconFlashTimer: Timer?
     var updaterController: SPUStandardUpdaterController!
 
-    private var dedupKey: String?
-    private var dedupTime: Date?
+    private var lastDedup: (key: String, time: Date)?
     /// Tracks the last alert time per rule+content combination for cooldown suppression.
     private var ruleCooldowns: [String: Date] = [:]
     /// Maps native notification request IDs → source contexts for focus-on-click.
-    private var nativeNotificationContexts: [String: SourceContext] = [:]
+    private var nativeNotificationContexts: [String: (context: SourceContext, createdAt: Date)] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.shared.info("app launching, pid=\(ProcessInfo.processInfo.processIdentifier, privacy: .public)")
@@ -195,17 +194,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     @objc private func navigateToRulesActive() {
         openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "rulesActive")
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.rulesActive)
     }
 
     @objc private func navigateToHistory() {
         openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "history")
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.history)
     }
 
     @objc private func navigateToSettings() {
         openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "settings")
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.settings)
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -366,7 +365,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     @objc private func openLogs() {
         openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: "logs")
+        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.logs)
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
@@ -425,11 +424,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private func shouldSuppressDuplicate(_ record: NotificationRecord) -> Bool {
         let key = "\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
         let now = Date()
-        if let dk = dedupKey, dk == key, let t = dedupTime, now.timeIntervalSince(t) < 5 {
+        if let last = lastDedup, last.key == key, now.timeIntervalSince(last.time) < 5 {
             return true
         }
-        dedupKey = key
-        dedupTime = now
+        lastDedup = (key: key, time: now)
         return false
     }
 
@@ -485,7 +483,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         content.sound = .default
         let requestId = UUID().uuidString
         if focusSourceOnDismiss, let ctx = record.sourceContext {
-            nativeNotificationContexts[requestId] = ctx
+            nativeNotificationContexts[requestId] = (context: ctx, createdAt: Date())
+            pruneStaleNotificationContexts()
         }
         let request = UNNotificationRequest(identifier: requestId, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
@@ -493,6 +492,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
                 AppLog.shared.error("failed to post native notification: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// Removes notification contexts older than 1 hour (auto-dismissed banners never trigger didReceive).
+    private func pruneStaleNotificationContexts() {
+        let cutoff = Date().addingTimeInterval(-3600)
+        nativeNotificationContexts = nativeNotificationContexts.filter { $0.value.createdAt > cutoff }
+    }
+
+    /// Removes cooldown entries that have expired (older than 2x the max cooldown).
+    private func pruneExpiredCooldowns() {
+        let now = Date()
+        ruleCooldowns = ruleCooldowns.filter { now.timeIntervalSince($0.value) < 7200 }
     }
 
     private func handleNewNotification(_ record: NotificationRecord) {
@@ -525,6 +536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
         ruleCooldowns[cooldownKey] = Date()
+        pruneExpiredCooldowns()
         AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: rule.displayMode), privacy: .public) focusSource=\(rule.focusSourceOnDismiss, privacy: .public)")
         presentAlert(for: record, displayMode: rule.displayMode, focusSourceOnDismiss: rule.focusSourceOnDismiss)
     }
@@ -623,8 +635,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     /// Focus the source terminal when the user clicks a native notification.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let requestId = response.notification.request.identifier
-        if let ctx = nativeNotificationContexts.removeValue(forKey: requestId) {
-            FullScreenAlertWindow.focusSource(ctx)
+        if let entry = nativeNotificationContexts.removeValue(forKey: requestId) {
+            FullScreenAlertWindow.focusSource(entry.context)
         }
         completionHandler()
     }

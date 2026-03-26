@@ -11,6 +11,22 @@ private enum SettingsChromeLayout {
     static let detailContentHorizontalPadding: CGFloat = 24
 }
 
+enum SettingsSidebarItem: Hashable {
+    case rulesActive
+    case history
+    case logs
+    case settings
+
+    var detailTitle: String {
+        switch self {
+        case .rulesActive: return "Active"
+        case .history: return "History"
+        case .logs: return "Logs"
+        case .settings: return "Settings"
+        }
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var appSettings: AppSettings
@@ -21,22 +37,6 @@ struct SettingsView: View {
 
     @State private var selectedSidebarItem: SettingsSidebarItem = .rulesActive
     @StateObject private var logStore = LogStore()
-
-    enum SettingsSidebarItem: Hashable {
-        case rulesActive
-        case history
-        case logs
-        case settings
-
-        var detailTitle: String {
-            switch self {
-            case .rulesActive: return "Active"
-            case .history: return "History"
-            case .logs: return "Logs"
-            case .settings: return "Settings"
-            }
-        }
-    }
 
     init(
         ruleStore: RuleStore,
@@ -151,14 +151,8 @@ struct SettingsView: View {
         .frame(minWidth: 860, minHeight: 540)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(NotificationCenter.default.publisher(for: .lumesentNavigateToTab)) { notification in
-            if let tab = notification.object as? String {
-                switch tab {
-                case "rulesActive": selectedSidebarItem = .rulesActive
-                case "history": selectedSidebarItem = .history
-                case "logs": selectedSidebarItem = .logs
-                case "settings": selectedSidebarItem = .settings
-                default: break
-                }
+            if let item = notification.object as? SettingsSidebarItem {
+                selectedSidebarItem = item
             }
         }
     }
@@ -838,13 +832,15 @@ struct RuleCard: View {
     }
 
     /// Average matches per hour over the last 4 hours.
-    private var matchesPerHour: Double {
+    private func matchesPerHour(_ entries: [HistoryEntry]) -> Double {
         let cutoff = Date().addingTimeInterval(-4 * 3600)
-        let recentCount = matchedEntries.filter { $0.date >= cutoff }.count
+        let recentCount = entries.filter { $0.date >= cutoff }.count
         return Double(recentCount) / 4.0
     }
 
     var body: some View {
+        let matched = matchedEntries
+        let matchRate = matchesPerHour(matched)
         VStack(alignment: .leading, spacing: 0) {
             // Header row (tap icon / summary / spacer / chevron to expand; toggle + trash stay separate)
             HStack(spacing: 10) {
@@ -875,16 +871,16 @@ struct RuleCard: View {
                                     .clipShape(Capsule())
                             }
 
-                            if !matchedEntries.isEmpty {
+                            if !matched.isEmpty {
                                 Button(action: { showingMatches.toggle() }) {
                                     HStack(spacing: 3) {
                                         Image(systemName: "bell.fill")
                                             .font(.system(size: 8))
-                                        Text("\(matchedEntries.count)")
+                                        Text("\(matched.count)")
                                             .font(.system(size: 10, weight: .medium))
                                         Text("·")
                                             .font(.system(size: 10))
-                                        Text(String(format: "%.1f/hr", matchesPerHour))
+                                        Text(String(format: "%.1f/hr", matchRate))
                                             .font(.system(size: 10, weight: .medium))
                                     }
                                     .padding(.horizontal, 6)
@@ -895,7 +891,7 @@ struct RuleCard: View {
                                 }
                                 .buttonStyle(.plain)
                                 .help("Show matched notifications")
-                                .accessibilityLabel("\(matchedEntries.count) matched notifications")
+                                .accessibilityLabel("\(matched.count) matched notifications")
                             }
                         }
 
@@ -942,17 +938,17 @@ struct RuleCard: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(matchedEntries.count) total")
+                        Text("\(matched.count) total")
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
 
-                    ForEach(Array(matchedEntries.prefix(5))) { entry in
+                    ForEach(Array(matched.prefix(5))) { entry in
                         MatchedNotificationRow(entry: entry)
                     }
 
-                    if matchedEntries.count > 5 {
-                        Text("+ \(matchedEntries.count - 5) more")
+                    if matched.count > 5 {
+                        Text("+ \(matched.count - 5) more")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -1316,29 +1312,11 @@ struct HistoryRow: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if entry.sourceVisibleSuppressed {
-                        Text("fullscreen downgraded, active window")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.blue)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(.blue.opacity(0.1))
-                            .clipShape(Capsule())
+                        StatusBadge(label: "fullscreen downgraded, active window", color: .blue)
                     } else if entry.cooldownSuppressed {
-                        Text("cooldown")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(.orange.opacity(0.1))
-                            .clipShape(Capsule())
+                        StatusBadge(label: "cooldown", color: .orange)
                     } else if entry.matched {
-                        Text("matched")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.green)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(.green.opacity(0.1))
-                            .clipShape(Capsule())
+                        StatusBadge(label: "matched", color: .green)
                     }
                     Text(relativeTime(entry.date))
                         .font(.system(size: 10))
@@ -2558,6 +2536,23 @@ struct LogsTab: View {
         case .debug: return .secondary
         default: return .secondary
         }
+    }
+}
+
+// MARK: - Status Badge
+
+struct StatusBadge: View {
+    let label: String
+    let color: Color
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.1))
+            .clipShape(Capsule())
     }
 }
 
