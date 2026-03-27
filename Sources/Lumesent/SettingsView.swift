@@ -1596,6 +1596,7 @@ struct SuggestingField<LabelAccessory: View>: View {
 
     @FocusState private var isFocused: Bool
     @State private var showSuggestions = false
+    @State private var suggestions: [Suggestion] = []
 
     init(_ label: String, text: Binding<String>, placeholder: String, history: NotificationHistory, field: SuggestionField, suggestionLeadingInset: CGFloat = 88, @ViewBuilder labelAccessory: @escaping () -> LabelAccessory) {
         self.label = label
@@ -1605,10 +1606,6 @@ struct SuggestingField<LabelAccessory: View>: View {
         self.field = field
         self.suggestionLeadingInset = suggestionLeadingInset
         self.labelAccessory = labelAccessory
-    }
-
-    private var suggestions: [Suggestion] {
-        history.suggestions(for: field, matching: text)
     }
 
     var body: some View {
@@ -1627,14 +1624,30 @@ struct SuggestingField<LabelAccessory: View>: View {
                     .onChange(of: isFocused) { _, focused in
                         if focused {
                             showSuggestions = true
+                            let snapshot = history.entries
+                            let f = field, t = text
+                            Task {
+                                let result = await Task.detached(priority: .userInitiated) {
+                                    NotificationHistory.computeSuggestions(entries: snapshot, field: f, matching: t)
+                                }.value
+                                suggestions = result
+                            }
                         } else {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 showSuggestions = false
                             }
                         }
                     }
-                    .onChange(of: text) { _, _ in
+                    .onChange(of: text) { _, newText in
                         showSuggestions = isFocused
+                        let snapshot = history.entries
+                        let f = field
+                        Task {
+                            let result = await Task.detached(priority: .userInitiated) {
+                                NotificationHistory.computeSuggestions(entries: snapshot, field: f, matching: newText)
+                            }.value
+                            suggestions = result
+                        }
                     }
             }
 

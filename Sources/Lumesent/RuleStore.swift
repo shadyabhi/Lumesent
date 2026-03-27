@@ -11,11 +11,15 @@ class RuleStore: ObservableObject {
     }
 
     func save() {
-        do {
-            let data = try JSONEncoder().encode(rules)
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            AppLog.shared.error("Failed to save rules: \(error.localizedDescription, privacy: .public)")
+        let snapshot = rules
+        let url = fileURL
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                AppLog.shared.error("Failed to save rules: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

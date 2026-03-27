@@ -23,6 +23,8 @@ final class NotificationMonitor: ObservableObject {
     private var fallbackTimer: Timer?
     private var axObserver: AXObserver?
     private let dbPath: String
+    /// Serial queue for all SQLite access — keeps db/lastSeenRecId off the main thread.
+    private let dbQueue = DispatchQueue(label: "com.lumesent.notificationdb", qos: .userInitiated)
 
     init(onNewNotification: @escaping (NotificationRecord) -> Void) {
         self.onNewNotification = onNewNotification
@@ -32,9 +34,12 @@ final class NotificationMonitor: ObservableObject {
 
     func start() {
         AppLog.shared.info("NotificationMonitor starting — dbPath=\(self.dbPath, privacy: .public)")
-        tryOpenDatabase()
-        if db != nil {
-            initializeLastSeenIdIfNeeded()
+        dbQueue.async { [weak self] in
+            guard let self else { return }
+            self.tryOpenDatabase()
+            if self.db != nil {
+                self.initializeLastSeenIdIfNeeded()
+            }
         }
         startAccessibilityObserver()
         startFallbackTimer()
@@ -89,9 +94,9 @@ final class NotificationMonitor: ObservableObject {
         AppLog.shared.info("initialized, last rec_id = \(self.lastSeenRecId, privacy: .public)")
     }
 
-    /// Returns `true` if at least one new notification was found.
+    /// Must be called on `dbQueue`. Returns `true` if at least one new notification was found.
     @discardableResult
-    func fetchNewNotifications() -> Bool {
+    private func fetchNewNotificationsOnQueue() -> Bool {
         guard let db else { return false }
 
         // Ensure we see the latest WAL frames by resetting the read transaction.
@@ -161,10 +166,11 @@ final class NotificationMonitor: ObservableObject {
             fetchCount += 1
             lastSeenRecId = recId
             AppLog.shared.info("fetched notification rec_id=\(recId, privacy: .public) app=\(appIdentifier, privacy: .public) title=\(title, privacy: .public) subtitle=\(subtitle, privacy: .public) body=\(body.prefix(80), privacy: .public) delivered=\(deliveredDate.description, privacy: .public)")
-            onNewNotification(record)
+            let callback = onNewNotification
+            DispatchQueue.main.async { callback(record) }
         }
         if fetchCount > 0 {
-            AppLog.shared.info("fetchNewNotifications: \(fetchCount, privacy: .public) new notification(s), lastSeenRecId=\(self.lastSeenRecId, privacy: .public)")
+            AppLog.shared.info("fetchNewNotificationsOnQueue: \(fetchCount, privacy: .public) new notification(s), lastSeenRecId=\(self.lastSeenRecId, privacy: .public)")
         }
         return foundAny
     }
@@ -202,12 +208,12 @@ final class NotificationMonitor: ObservableObject {
         let callback: AXObserverCallback = { _, _, _, refcon in
             guard let refcon else { return }
             let monitor = Unmanaged<NotificationMonitor>.fromOpaque(refcon).takeUnretainedValue()
-            DispatchQueue.main.async {
-                let found = monitor.fetchNewNotifications()
+            monitor.dbQueue.async {
+                let found = monitor.fetchNewNotificationsOnQueue()
                 if !found {
                     // DB row may not be committed yet; retry once after a short delay.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        monitor.fetchNewNotifications()
+                        monitor.dbQueue.async { monitor.fetchNewNotificationsOnQueue() }
                     }
                 }
             }
@@ -249,18 +255,23 @@ final class NotificationMonitor: ObservableObject {
         AppLog.shared.info("fallback poll timer started (2s interval)")
         fallbackTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             guard let self else { return }
+            // AX observer check stays on main — axObserver is only touched on main.
             if self.axObserver == nil && AXIsProcessTrusted() {
                 AppLog.shared.info("fallback timer: AX now trusted, retrying observer setup")
                 self.startAccessibilityObserver()
             }
-            if self.db == nil {
-                AppLog.shared.debug("fallback timer: DB not open, attempting reconnect")
-                self.tryOpenDatabase()
-                if self.db != nil {
-                    self.initializeLastSeenIdIfNeeded()
+            // DB work goes to the serial dbQueue.
+            self.dbQueue.async { [weak self] in
+                guard let self else { return }
+                if self.db == nil {
+                    AppLog.shared.debug("fallback timer: DB not open, attempting reconnect")
+                    self.tryOpenDatabase()
+                    if self.db != nil {
+                        self.initializeLastSeenIdIfNeeded()
+                    }
                 }
+                self.fetchNewNotificationsOnQueue()
             }
-            self.fetchNewNotifications()
         }
     }
 }

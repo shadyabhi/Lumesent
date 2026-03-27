@@ -140,7 +140,11 @@ class NotificationHistory: ObservableObject {
     /// Returns suggestions for a given field, deduplicated by value, most recent first.
     /// Each suggestion carries the most recent full entry for preview.
     func suggestions(for field: SuggestionField, matching query: String) -> [Suggestion] {
-        // Group entries by the target field value, keep most recent per unique value
+        Self.computeSuggestions(entries: entries, field: field, matching: query)
+    }
+
+    /// Pure computation on a snapshot — safe to call from any thread.
+    static func computeSuggestions(entries: [HistoryEntry], field: SuggestionField, matching query: String) -> [Suggestion] {
         var latest: [String: HistoryEntry] = [:]
         for entry in entries {
             let value = field.value(from: entry)
@@ -152,19 +156,14 @@ class NotificationHistory: ObservableObject {
             }
         }
 
-        var results = latest.values.map { entry in
-            Suggestion(displayValue: field.value(from: entry), entry: entry)
-        }
+        var results = latest.values.map { Suggestion(displayValue: field.value(from: $0), entry: $0) }
 
-        // Filter by query
         if !query.isEmpty {
             let q = query.lowercased()
             results = results.filter { $0.displayValue.lowercased().contains(q) && $0.displayValue != query }
         }
 
-        // Sort most recent first
         results.sort { $0.entry.date > $1.entry.date }
-
         return results
     }
 }
@@ -192,28 +191,39 @@ struct Suggestion: Identifiable {
 
 private extension NotificationHistory {
     func save() {
-        do {
-            let data = try JSONEncoder().encode(entries)
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            AppLog.shared.error("Failed to save notification history: \(error.localizedDescription, privacy: .public)")
+        let snapshot = entries
+        let url = fileURL
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                AppLog.shared.error("Failed to save notification history: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
     func load() {
-        guard let data = try? Data(contentsOf: fileURL) else {
-            AppLog.shared.info("no history file at \(self.fileURL.path, privacy: .public), starting empty")
-            return
-        }
-        guard let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
-            AppLog.shared.error("failed to decode history from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
-            return
-        }
-        entries = decoded.count > Self.maxEntries ? Array(decoded.suffix(Self.maxEntries)) : decoded
-        AppLog.shared.info("loaded \(self.entries.count, privacy: .public) history entries (\(self.entries.filter(\.matched).count, privacy: .public) matched)")
-        if decoded.count > Self.maxEntries {
-            AppLog.shared.info("history trimmed from \(decoded.count, privacy: .public) to \(Self.maxEntries, privacy: .public)")
-            save()
+        let url = fileURL
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            guard let data = try? Data(contentsOf: url) else {
+                AppLog.shared.info("no history file at \(url.path, privacy: .public), starting empty")
+                return
+            }
+            guard let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
+                AppLog.shared.error("failed to decode history from \(url.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
+                return
+            }
+            let trimmed = decoded.count > Self.maxEntries ? Array(decoded.suffix(Self.maxEntries)) : decoded
+            AppLog.shared.info("loaded \(trimmed.count, privacy: .public) history entries (\(trimmed.filter(\.matched).count, privacy: .public) matched)")
+            DispatchQueue.main.async {
+                self.entries = trimmed
+                if decoded.count > Self.maxEntries {
+                    AppLog.shared.info("history trimmed from \(decoded.count, privacy: .public) to \(Self.maxEntries, privacy: .public)")
+                    self.save()
+                }
+            }
         }
     }
 }

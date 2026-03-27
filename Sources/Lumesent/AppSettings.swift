@@ -136,22 +136,26 @@ class AppSettings: ObservableObject {
     }
 
     func save() {
-        do {
-            let data = try JSONEncoder().encode(SettingsData(
-                dismissKey: dismissKey,
-                showInDock: showInDock,
-                alertPresentation: alertPresentation,
-                pauseAlertsUntil: pauseAlertsUntil,
-                socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
-                updateChannel: updateChannel == .stable ? nil : updateChannel,
-                updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval,
-                activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior,
-                soundEnabled: soundEnabled ? true : nil,
-                alertSound: alertSound
-            ))
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            AppLog.shared.error("Failed to save settings: \(error.localizedDescription, privacy: .public)")
+        let payload = SettingsData(
+            dismissKey: dismissKey,
+            showInDock: showInDock,
+            alertPresentation: alertPresentation,
+            pauseAlertsUntil: pauseAlertsUntil,
+            socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
+            updateChannel: updateChannel == .stable ? nil : updateChannel,
+            updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval,
+            activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior,
+            soundEnabled: soundEnabled ? true : nil,
+            alertSound: alertSound
+        )
+        let url = fileURL
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(payload)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                AppLog.shared.error("Failed to save settings: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
