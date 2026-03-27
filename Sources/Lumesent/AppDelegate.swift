@@ -338,7 +338,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let record = NotificationRecord.fromExternal(ext)
         AppLog.shared.info("external notification: title=\(record.title, privacy: .public) app=\(record.appName, privacy: .public) alertType=\(ext.alertType ?? "fullscreen", privacy: .public) displayMode=\(String(describing: ext.displayMode), privacy: .public)")
         guard !appSettings.isPauseActive else {
-            notificationHistory.record(record, matched: true, matchedRuleId: nil)
+            notificationHistory.record(record, matched: true, matchedRuleIds: [])
             AppLog.shared.debug("skipped external alert (paused)")
             return
         }
@@ -352,18 +352,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
                     guard let self else { return }
                     if visible {
                         AppLog.shared.info("\(behavior == .suppress ? "suppressed" : "downgraded", privacy: .public) external alert (source pane visible): title=\(record.title, privacy: .public) pane=\(ctx.tmuxPane ?? "nil", privacy: .public) terminal=\(ctx.terminalAppBundleId ?? "nil", privacy: .public)")
-                        self.notificationHistory.record(record, matched: true, matchedRuleId: nil, sourceVisibleSuppressed: true)
+                        self.notificationHistory.record(record, matched: true, matchedRuleIds: [], sourceVisibleSuppressed: true)
                         if behavior == .downgrade {
                             self.postNativeNotification(record, focusSourceOnDismiss: focus)
                         }
                         return
                     }
-                    self.notificationHistory.record(record, matched: true, matchedRuleId: nil)
+                    self.notificationHistory.record(record, matched: true, matchedRuleIds: [])
                     self.presentExternalAlert(ext, record: record, focusSource: focus)
                 }
             }
         } else {
-            notificationHistory.record(record, matched: true, matchedRuleId: nil)
+            notificationHistory.record(record, matched: true, matchedRuleIds: [])
             presentExternalAlert(ext, record: record, focusSource: focus)
         }
     }
@@ -411,37 +411,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     private func handleNewNotification(_ record: NotificationRecord) {
         AppLog.shared.info("handleNewNotification: app=\(record.appName, privacy: .public) (\(record.appIdentifier, privacy: .public)) title=\(record.title, privacy: .public) subtitle=\(record.subtitle, privacy: .public) body=\(record.body.prefix(80), privacy: .public) time=\(record.deliveredDate.description, privacy: .public)")
-        let matchedRule = filterEngine.matchingRule(for: record)
+        let matchedRules = filterEngine.matchingRules(for: record)
 
-        guard let rule = matchedRule else {
+        guard !matchedRules.isEmpty else {
             notificationHistory.record(record, matched: false)
             AppLog.shared.debug("no rule matched for: app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
             return
         }
-        AppLog.shared.info("rule matched: ruleId=\(rule.id.uuidString, privacy: .public) label=\(rule.label, privacy: .public) for app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public)")
+        let matchedIds = matchedRules.map(\.id)
+        AppLog.shared.info("\(matchedRules.count, privacy: .public) rule(s) matched for app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public): \(matchedIds.map { $0.uuidString }, privacy: .public)")
+
         guard !appSettings.isPauseActive else {
-            notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
+            notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds)
             AppLog.shared.debug("skipped alert (paused until \(String(describing: self.appSettings.pauseAlertsUntil), privacy: .public)): \(record.title, privacy: .public)")
             return
         }
         if shouldSuppressDuplicate(record) {
-            notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
+            notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds)
             AppLog.shared.debug("dedup skip: \(record.title, privacy: .public)")
             return
         }
-        let cooldownKey = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
-        if rule.cooldownSeconds > 0, let lastFired = ruleCooldowns[cooldownKey],
-           Date().timeIntervalSince(lastFired) < rule.cooldownSeconds {
-            notificationHistory.record(record, matched: true, matchedRuleId: rule.id, cooldownSuppressed: true)
-            AppLog.shared.info("cooldown skip: ruleId=\(rule.id.uuidString, privacy: .public) title=\(record.title, privacy: .public) (cooldown \(rule.cooldownSeconds, privacy: .public)s)")
+
+        // Filter to rules not on cooldown. Each rule has its own cooldown key.
+        let now = Date()
+        let activeRules = matchedRules.filter { rule in
+            let key = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
+            guard rule.cooldownSeconds > 0, let lastFired = ruleCooldowns[key] else { return true }
+            let suppressed = now.timeIntervalSince(lastFired) < rule.cooldownSeconds
+            if suppressed {
+                AppLog.shared.info("cooldown skip: ruleId=\(rule.id.uuidString, privacy: .public) title=\(record.title, privacy: .public) (cooldown \(rule.cooldownSeconds, privacy: .public)s)")
+            }
+            return !suppressed
+        }
+
+        guard !activeRules.isEmpty else {
+            notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds, cooldownSuppressed: true)
             return
         }
 
-        notificationHistory.record(record, matched: true, matchedRuleId: rule.id)
-        ruleCooldowns[cooldownKey] = Date()
+        notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds)
+        for rule in activeRules {
+            let key = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
+            ruleCooldowns[key] = now
+        }
         pruneExpiredCooldowns()
-        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: rule.displayMode), privacy: .public) focusSource=\(rule.focusSourceOnDismiss, privacy: .public)")
-        presentAlert(for: record, displayMode: rule.displayMode, focusSourceOnDismiss: rule.focusSourceOnDismiss)
+
+        // Merge display settings across all active rules: sticky beats timed; longest timeout wins; focus if any rule requests it.
+        let displayMode: AlertDisplayMode = activeRules.reduce(.defaultTimed) { best, rule in
+            switch (best, rule.displayMode) {
+            case (.sticky, _): return .sticky
+            case (_, .sticky): return .sticky
+            case (.timed(let a), .timed(let b)): return .timed(seconds: max(a, b))
+            }
+        }
+        let focusSource = activeRules.contains { $0.focusSourceOnDismiss }
+
+        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public) focusSource=\(focusSource, privacy: .public) activeRules=\(activeRules.count, privacy: .public)")
+        presentAlert(for: record, displayMode: displayMode, focusSourceOnDismiss: focusSource)
     }
 
     @objc private func openSettings() {
