@@ -1260,6 +1260,34 @@ struct MatchedNotificationRow: View {
     }
 }
 
+// MARK: - Filter Chip
+
+private struct FilterChip: View {
+    let label: String
+    var icon: String? = nil
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                }
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - History Tab
 
 struct HistoryTab: View {
@@ -1268,36 +1296,53 @@ struct HistoryTab: View {
     @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
+    @State private var showMatchedOnly: Bool = false
+
     private var historyEntries: [HistoryEntry] {
-        history.entries.reversed()
+        if showMatchedOnly {
+            return history.entries.reversed().filter(\.isDisplayableMatch)
+        }
+        return Array(history.entries.reversed())
     }
 
     var body: some View {
-        if historyEntries.isEmpty {
-            VStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                Text("No notifications yet")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text("Notifications will appear here as they arrive.")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                FilterChip(label: "All", isSelected: !showMatchedOnly) { showMatchedOnly = false }
+                FilterChip(label: "Matched", icon: "bell.fill", isSelected: showMatchedOnly) { showMatchedOnly = true }
+                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollView {
-                SettingsDetailSectionCard(title: "Notification history") {
-                    LazyVStack(spacing: 8) {
-                        ForEach(historyEntries) { entry in
-                            HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            if historyEntries.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: showMatchedOnly ? "bell.slash" : "clock.arrow.circlepath")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                    Text(showMatchedOnly ? "No matched alerts yet" : "No notifications yet")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text(showMatchedOnly ? "Alerts that trigger your rules will appear here." : "Notifications will appear here as they arrive.")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    SettingsDetailSectionCard(title: showMatchedOnly ? "Matched notifications" : "Notification history") {
+                        LazyVStack(spacing: 8) {
+                            ForEach(historyEntries) { entry in
+                                HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+                            }
                         }
                     }
+                    .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
-                .padding(.vertical, 12)
             }
         }
     }
