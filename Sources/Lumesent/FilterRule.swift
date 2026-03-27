@@ -58,6 +58,11 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var focusSourceOnDismiss: Bool
     var cooldownSeconds: Double
 
+    /// Returns a copy with a new `id`, suitable for cloning.
+    func cloned() -> FilterRule {
+        FilterRule(appIdentifier: appIdentifier, appOperator: appOperator, titleContains: titleContains, titleOperator: titleOperator, subtitleContains: subtitleContains, subtitleOperator: subtitleOperator, bodyContains: bodyContains, bodyOperator: bodyOperator, isEnabled: isEnabled, label: label, ruleDescription: ruleDescription, displayMode: displayMode, focusSourceOnDismiss: focusSourceOnDismiss, cooldownSeconds: cooldownSeconds)
+    }
+
     init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true, cooldownSeconds: Double = 60) {
         self.id = id
         self.appIdentifier = appIdentifier

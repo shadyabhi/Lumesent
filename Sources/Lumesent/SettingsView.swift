@@ -621,23 +621,7 @@ struct RulesTab: View {
                                 save()
                             },
                             onClone: {
-                                let original = ruleStore.rules[index]
-                                let clone = FilterRule(
-                                    appIdentifier: original.appIdentifier,
-                                    appOperator: original.appOperator,
-                                    titleContains: original.titleContains,
-                                    titleOperator: original.titleOperator,
-                                    subtitleContains: original.subtitleContains,
-                                    subtitleOperator: original.subtitleOperator,
-                                    bodyContains: original.bodyContains,
-                                    bodyOperator: original.bodyOperator,
-                                    isEnabled: original.isEnabled,
-                                    label: original.label,
-                                    ruleDescription: original.ruleDescription,
-                                    displayMode: original.displayMode,
-                                    focusSourceOnDismiss: original.focusSourceOnDismiss,
-                                    cooldownSeconds: original.cooldownSeconds
-                                )
+                                let clone = ruleStore.rules[index].cloned()
                                 ruleStore.rules.insert(clone, at: index + 1)
                                 save()
                             },
