@@ -9,4 +9,15 @@ enum FileLocations {
     }()
 
     static let defaultSocketPath: String = appSupportDirectory.appendingPathComponent("notify.sock").path
+
+    static func saveJSON<T: Encodable>(_ value: T, to url: URL, label: String) {
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(value)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                AppLog.shared.error("Failed to save \(label, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
 }

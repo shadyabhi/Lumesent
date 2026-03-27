@@ -83,9 +83,7 @@ struct HistoryEntry: Codable, Identifiable {
 class NotificationHistory: ObservableObject {
     @Published private(set) var entries: [HistoryEntry] = []
 
-    /// How many entries are retained on disk (UI may reference this in copy).
-    static let storedEntryLimit = 1000
-    private static let maxEntries = storedEntryLimit
+    static let maxEntries = 1000
     private let fileURL: URL
     private var saveTimer: Timer?
 
@@ -191,16 +189,7 @@ struct Suggestion: Identifiable {
 
 private extension NotificationHistory {
     func save() {
-        let snapshot = entries
-        let url = fileURL
-        DispatchQueue.global(qos: .utility).async {
-            do {
-                let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: url, options: .atomic)
-            } catch {
-                AppLog.shared.error("Failed to save notification history: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        FileLocations.saveJSON(entries, to: fileURL, label: "notification history")
     }
 
     func load() {

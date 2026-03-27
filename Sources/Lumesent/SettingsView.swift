@@ -500,10 +500,7 @@ struct RulesTab: View {
     @State private var importExportMessage = ""
     @State private var showingImportExportAlert = false
 
-    private var allLabels: [String] {
-        let labels = Set(ruleStore.rules.compactMap { $0.label.isEmpty ? nil : $0.label })
-        return labels.sorted()
-    }
+    private var allLabels: [String] { ruleStore.sortedLabels }
 
     private var labelCounts: [String: Int] {
         var counts: [String: Int] = [:]
@@ -1146,7 +1143,7 @@ struct RuleCard: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("\(historyPreviewMatches.count) in last \(NotificationHistory.storedEntryLimit)")
+                    Text("\(historyPreviewMatches.count) in last \(NotificationHistory.maxEntries)")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
@@ -1483,9 +1480,7 @@ struct QuickRuleCreator: View {
         self._editBody = State(initialValue: entry.body)
     }
 
-    private var allLabels: [String] {
-        Set(ruleStore.rules.compactMap { $0.label.isEmpty ? nil : $0.label }).sorted()
-    }
+    private var allLabels: [String] { ruleStore.sortedLabels }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1597,6 +1592,7 @@ struct SuggestingField<LabelAccessory: View>: View {
     @FocusState private var isFocused: Bool
     @State private var showSuggestions = false
     @State private var suggestions: [Suggestion] = []
+    @State private var suggestionTask: Task<Void, Never>?
 
     init(_ label: String, text: Binding<String>, placeholder: String, history: NotificationHistory, field: SuggestionField, suggestionLeadingInset: CGFloat = 88, @ViewBuilder labelAccessory: @escaping () -> LabelAccessory) {
         self.label = label
@@ -1606,6 +1602,19 @@ struct SuggestingField<LabelAccessory: View>: View {
         self.field = field
         self.suggestionLeadingInset = suggestionLeadingInset
         self.labelAccessory = labelAccessory
+    }
+
+    private func refreshSuggestions(query: String) {
+        suggestionTask?.cancel()
+        let snapshot = history.entries
+        let f = field
+        suggestionTask = Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                NotificationHistory.computeSuggestions(entries: snapshot, field: f, matching: query)
+            }.value
+            guard !Task.isCancelled else { return }
+            suggestions = result
+        }
     }
 
     var body: some View {
@@ -1624,14 +1633,7 @@ struct SuggestingField<LabelAccessory: View>: View {
                     .onChange(of: isFocused) { _, focused in
                         if focused {
                             showSuggestions = true
-                            let snapshot = history.entries
-                            let f = field, t = text
-                            Task {
-                                let result = await Task.detached(priority: .userInitiated) {
-                                    NotificationHistory.computeSuggestions(entries: snapshot, field: f, matching: t)
-                                }.value
-                                suggestions = result
-                            }
+                            refreshSuggestions(query: text)
                         } else {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 showSuggestions = false
@@ -1640,14 +1642,7 @@ struct SuggestingField<LabelAccessory: View>: View {
                     }
                     .onChange(of: text) { _, newText in
                         showSuggestions = isFocused
-                        let snapshot = history.entries
-                        let f = field
-                        Task {
-                            let result = await Task.detached(priority: .userInitiated) {
-                                NotificationHistory.computeSuggestions(entries: snapshot, field: f, matching: newText)
-                            }.value
-                            suggestions = result
-                        }
+                        refreshSuggestions(query: newText)
                     }
             }
 
@@ -2151,7 +2146,7 @@ struct SettingsTab: View {
 
                 SettingsDetailSectionCard(title: "Data") {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Lumesent stores the last \(NotificationHistory.storedEntryLimit) notifications locally for rule-building suggestions.")
+                        Text("Lumesent stores the last \(NotificationHistory.maxEntries) notifications locally for rule-building suggestions.")
                             .font(.system(size: 11))
                             .foregroundStyle(captionColor)
                             .fixedSize(horizontal: false, vertical: true)

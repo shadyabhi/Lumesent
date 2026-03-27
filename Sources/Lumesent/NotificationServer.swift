@@ -20,12 +20,14 @@ final class NotificationServer {
             return
         }
 
-        guard var (addr, addrLen) = makeUnixSocketAddress(socketPath) else {
+        guard let socketAddress = makeUnixSocketAddress(socketPath) else {
             AppLog.shared.error("socket path too long for sockaddr_un")
             close(serverFD)
             serverFD = -1
             return
         }
+        var addr = socketAddress.0
+        let addrLen = socketAddress.1
 
         let bindResult = bindUnixSocket(serverFD, address: &addr, length: addrLen)
         guard bindResult == 0 else {

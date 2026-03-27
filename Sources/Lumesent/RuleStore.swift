@@ -10,17 +10,12 @@ class RuleStore: ObservableObject {
         load()
     }
 
+    var sortedLabels: [String] {
+        Set(rules.compactMap { $0.label.isEmpty ? nil : $0.label }).sorted()
+    }
+
     func save() {
-        let snapshot = rules
-        let url = fileURL
-        DispatchQueue.global(qos: .utility).async {
-            do {
-                let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: url, options: .atomic)
-            } catch {
-                AppLog.shared.error("Failed to save rules: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        FileLocations.saveJSON(rules, to: fileURL, label: "rules")
     }
 
     func exportRulesJSON() throws -> Data {

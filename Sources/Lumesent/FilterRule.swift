@@ -15,12 +15,18 @@ enum MatchOperator: String, Codable, CaseIterable, Equatable {
         case .equals:
             return haystack.caseInsensitiveCompare(needle) == .orderedSame
         case .regex:
-            guard let regex = try? NSRegularExpression(pattern: needle, options: .caseInsensitive) else {
-                return false
-            }
+            guard let regex = Self.cachedRegex(needle) else { return false }
             let range = NSRange(haystack.startIndex..., in: haystack)
             return regex.firstMatch(in: haystack, range: range) != nil
         }
+    }
+
+    private static var regexCache: [String: NSRegularExpression] = [:]
+    private static func cachedRegex(_ pattern: String) -> NSRegularExpression? {
+        if let cached = regexCache[pattern] { return cached }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        regexCache[pattern] = regex
+        return regex
     }
 }
 

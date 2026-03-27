@@ -434,8 +434,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         // Filter to rules not on cooldown. Each rule has its own cooldown key.
         let now = Date()
+        func cooldownKey(for rule: FilterRule) -> String {
+            "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
+        }
         let activeRules = matchedRules.filter { rule in
-            let key = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
+            let key = cooldownKey(for: rule)
             guard rule.cooldownSeconds > 0, let lastFired = ruleCooldowns[key] else { return true }
             let suppressed = now.timeIntervalSince(lastFired) < rule.cooldownSeconds
             if suppressed {
@@ -451,8 +454,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds)
         for rule in activeRules {
-            let key = "\(rule.id)|\(record.appIdentifier)|\(record.title)|\(record.subtitle)|\(record.body)"
-            ruleCooldowns[key] = now
+            ruleCooldowns[cooldownKey(for: rule)] = now
         }
         pruneExpiredCooldowns()
 

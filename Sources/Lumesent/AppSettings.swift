@@ -148,15 +148,7 @@ class AppSettings: ObservableObject {
             soundEnabled: soundEnabled ? true : nil,
             alertSound: alertSound
         )
-        let url = fileURL
-        DispatchQueue.global(qos: .utility).async {
-            do {
-                let data = try JSONEncoder().encode(payload)
-                try data.write(to: url, options: .atomic)
-            } catch {
-                AppLog.shared.error("Failed to save settings: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        FileLocations.saveJSON(payload, to: fileURL, label: "settings")
     }
 
     private func load() {

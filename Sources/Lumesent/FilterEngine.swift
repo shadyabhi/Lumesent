@@ -13,10 +13,6 @@ class FilterEngine {
         return enabledRules.filter { matchesRule(notification, $0) }
     }
 
-    func matchingRule(for notification: NotificationRecord) -> FilterRule? {
-        matchingRules(for: notification).first
-    }
-
     private func matchesRule(_ n: NotificationRecord, _ r: FilterRule) -> Bool {
         guard r.matchesFields(of: n) else {
             AppLog.shared.debug("rule \(r.label, privacy: .public) (\(r.id.uuidString.prefix(8), privacy: .public)): no match for app=\(n.appIdentifier, privacy: .public) title=\(n.title, privacy: .public)")
