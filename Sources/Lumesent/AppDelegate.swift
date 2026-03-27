@@ -569,8 +569,46 @@ extension AppDelegate: SPUUpdaterDelegate {
         let nsError = error as NSError
         if nsError.domain == SUSparkleErrorDomain && nsError.code == Int(SUError.noUpdateError.rawValue) {
             AppLog.shared.info("Sparkle: already up to date")
-        } else {
-            AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+
+        // Log full error chain for debugging
+        AppLog.shared.error("Sparkle update aborted: \(error.localizedDescription, privacy: .public)")
+        AppLog.shared.error("Sparkle error domain: \(nsError.domain, privacy: .public), code: \(nsError.code, privacy: .public)")
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            AppLog.shared.error("Sparkle underlying error: \(underlying.localizedDescription, privacy: .public) (domain: \(underlying.domain, privacy: .public), code: \(underlying.code, privacy: .public))")
+        }
+        for (key, value) in nsError.userInfo where key != NSUnderlyingErrorKey {
+            AppLog.shared.error("Sparkle error info [\(key, privacy: .public)]: \(String(describing: value), privacy: .public)")
+        }
+
+        // Show alert to user with actionable details
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Update Failed"
+
+            // Build a useful description from the error chain
+            var details = error.localizedDescription
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                details += "\n\n\(underlying.localizedDescription)"
+            }
+            if let recovery = nsError.localizedRecoverySuggestion {
+                details += "\n\n\(recovery)"
+            }
+            alert.informativeText = details
+
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "View Logs")
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            let response = alert.runModal()
+            if response == .alertSecondButtonReturn {
+                self.openLogs()
+            }
+            if !self.appSettings.showInDock {
+                NSApp.setActivationPolicy(.accessory)
+            }
         }
     }
 }
