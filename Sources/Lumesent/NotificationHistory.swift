@@ -9,16 +9,20 @@ struct HistoryEntry: Codable, Identifiable {
     let body: String
     let date: Date
     var matched: Bool = false
-    var matchedRuleId: UUID? = nil
+    /// All rule IDs that matched this notification (may be multiple).
+    var matchedRuleIds: [UUID] = []
     var cooldownSuppressed: Bool = false
     var sourceVisibleSuppressed: Bool = false
+
+    /// First matched rule ID, for backwards compatibility.
+    var matchedRuleId: UUID? { matchedRuleIds.first }
 
     /// True when matched and a visible alert was actually shown (not cooldown- or source-suppressed).
     var isDisplayableMatch: Bool {
         matched && !cooldownSuppressed && !sourceVisibleSuppressed
     }
 
-    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
+    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
         self.id = UUID()
         self.appIdentifier = appIdentifier
         self.appName = appName
@@ -27,7 +31,7 @@ struct HistoryEntry: Codable, Identifiable {
         self.body = body
         self.date = date
         self.matched = matched
-        self.matchedRuleId = matchedRuleId
+        self.matchedRuleIds = matchedRuleIds
         self.cooldownSuppressed = cooldownSuppressed
         self.sourceVisibleSuppressed = sourceVisibleSuppressed
     }
@@ -42,9 +46,22 @@ struct HistoryEntry: Codable, Identifiable {
         body = try c.decode(String.self, forKey: .body)
         date = try c.decode(Date.self, forKey: .date)
         matched = try c.decodeIfPresent(Bool.self, forKey: .matched) ?? false
-        matchedRuleId = try c.decodeIfPresent(UUID.self, forKey: .matchedRuleId)
+        // Migrate: prefer new matchedRuleIds array, fall back to legacy matchedRuleId scalar
+        if let ids = try c.decodeIfPresent([UUID].self, forKey: .matchedRuleIds) {
+            matchedRuleIds = ids
+        } else if let legacyId = try c.decodeIfPresent(UUID.self, forKey: .matchedRuleId) {
+            matchedRuleIds = [legacyId]
+        } else {
+            matchedRuleIds = []
+        }
         cooldownSuppressed = try c.decodeIfPresent(Bool.self, forKey: .cooldownSuppressed) ?? false
         sourceVisibleSuppressed = try c.decodeIfPresent(Bool.self, forKey: .sourceVisibleSuppressed) ?? false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, appIdentifier, appName, title, subtitle, body, date, matched
+        case matchedRuleIds, matchedRuleId
+        case cooldownSuppressed, sourceVisibleSuppressed
     }
 }
 
@@ -62,7 +79,7 @@ class NotificationHistory: ObservableObject {
         load()
     }
 
-    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
+    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
         let entry = HistoryEntry(
             appIdentifier: notification.appIdentifier,
             appName: notification.appName,
@@ -71,7 +88,7 @@ class NotificationHistory: ObservableObject {
             body: notification.body,
             date: min(notification.deliveredDate, Date()),
             matched: matched,
-            matchedRuleId: matchedRuleId,
+            matchedRuleIds: matchedRuleIds,
             cooldownSuppressed: cooldownSuppressed,
             sourceVisibleSuppressed: sourceVisibleSuppressed
         )
@@ -102,7 +119,7 @@ class NotificationHistory: ObservableObject {
 
     /// Returns matched entries for a specific rule, most recent first.
     func matchedEntries(for ruleId: UUID) -> [HistoryEntry] {
-        entries.filter { $0.matchedRuleId == ruleId }.reversed()
+        entries.filter { $0.matchedRuleIds.contains(ruleId) }.reversed()
     }
 
     /// Returns suggestions for a given field, deduplicated by value, most recent first.

@@ -7,15 +7,14 @@ class FilterEngine {
         self.rules = rules
     }
 
-    func matchingRule(for notification: NotificationRecord) -> FilterRule? {
+    func matchingRules(for notification: NotificationRecord) -> [FilterRule] {
         let enabledRules = rules.filter { $0.isEnabled && $0.isValid }
         AppLog.shared.debug("evaluating \(enabledRules.count, privacy: .public) enabled rules against app=\(notification.appIdentifier, privacy: .public)")
-        for rule in enabledRules {
-            if matchesRule(notification, rule) {
-                return rule
-            }
-        }
-        return nil
+        return enabledRules.filter { matchesRule(notification, $0) }
+    }
+
+    func matchingRule(for notification: NotificationRecord) -> FilterRule? {
+        matchingRules(for: notification).first
     }
 
     private func matchesRule(_ n: NotificationRecord, _ r: FilterRule) -> Bool {
