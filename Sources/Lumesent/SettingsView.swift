@@ -1245,6 +1245,34 @@ struct MatchedNotificationRow: View {
     }
 }
 
+// MARK: - Filter Chip
+
+private struct FilterChip: View {
+    let label: String
+    var icon: String? = nil
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                }
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - History Tab
 
 struct HistoryTab: View {
@@ -1256,42 +1284,17 @@ struct HistoryTab: View {
     @State private var showMatchedOnly: Bool = false
 
     private var historyEntries: [HistoryEntry] {
-        let reversed = Array(history.entries.reversed())
         if showMatchedOnly {
-            return reversed.filter { $0.matched && !$0.cooldownSuppressed && !$0.sourceVisibleSuppressed }
+            return history.entries.reversed().filter(\.isDisplayableMatch)
         }
-        return reversed
+        return Array(history.entries.reversed())
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Button(action: { showMatchedOnly = false }) {
-                    Text("All")
-                        .font(.system(size: 12, weight: .medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(!showMatchedOnly ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                        .foregroundStyle(!showMatchedOnly ? Color.white : Color.primary)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { showMatchedOnly = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 10))
-                        Text("Matched")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(showMatchedOnly ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                    .foregroundStyle(showMatchedOnly ? Color.white : Color.primary)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-
+                FilterChip(label: "All", isSelected: !showMatchedOnly) { showMatchedOnly = false }
+                FilterChip(label: "Matched", icon: "bell.fill", isSelected: showMatchedOnly) { showMatchedOnly = true }
                 Spacer()
             }
             .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)

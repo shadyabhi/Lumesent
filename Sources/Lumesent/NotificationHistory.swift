@@ -13,6 +13,11 @@ struct HistoryEntry: Codable, Identifiable {
     var cooldownSuppressed: Bool = false
     var sourceVisibleSuppressed: Bool = false
 
+    /// True when matched and a visible alert was actually shown (not cooldown- or source-suppressed).
+    var isDisplayableMatch: Bool {
+        matched && !cooldownSuppressed && !sourceVisibleSuppressed
+    }
+
     init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleId: UUID? = nil, cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
         self.id = UUID()
         self.appIdentifier = appIdentifier

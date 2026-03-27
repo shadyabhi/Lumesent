@@ -217,7 +217,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         menu.addItem(versionItem)
         menu.addItem(.separator())
 
-        let matchedCount = notificationHistory.entries.filter { $0.matched && !$0.cooldownSuppressed && !$0.sourceVisibleSuppressed }.count
+        let matchedCount = notificationHistory.entries.filter(\.isDisplayableMatch).count
         let historyLabel = matchedCount == 0 ? "View History" : "View History (\(matchedCount) matched)"
         let historyItem = NSMenuItem(title: historyLabel, action: #selector(navigateToHistory), keyEquivalent: "")
         historyItem.target = self
