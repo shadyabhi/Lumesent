@@ -321,6 +321,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             }
         }
 
+        let historyItem = NSMenuItem(title: "View History…", action: #selector(navigateToHistory), keyEquivalent: "")
+        historyItem.target = self
+        menu.addItem(historyItem)
+
         menu.addItem(.separator())
 
         if appSettings.isPauseActive, let until = appSettings.pauseAlertsUntil {
