@@ -100,11 +100,6 @@ class NotificationHistory: ObservableObject {
         }
     }
 
-    /// Most recent notifications that actually triggered a visible alert (not cooldown/suppressed).
-    func recentMatches(count: Int) -> [HistoryEntry] {
-        Array(entries.filter(\.isDisplayableMatch).sorted { $0.date > $1.date }.prefix(count))
-    }
-
     /// Returns matched entries for a specific rule, most recent first.
     func matchedEntries(for ruleId: UUID) -> [HistoryEntry] {
         entries.filter { $0.matchedRuleId == ruleId }.reversed()

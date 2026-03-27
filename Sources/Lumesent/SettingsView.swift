@@ -937,6 +937,7 @@ struct RuleCard: View {
                         .foregroundStyle(.red.opacity(0.7))
                 }
                 .buttonStyle(.plain)
+                .help("Delete rule")
                 .accessibilityLabel("Delete rule")
             }
             .padding(.horizontal, 14)
@@ -1264,7 +1265,7 @@ struct MatchedNotificationRow: View {
 
 private struct FilterChip: View {
     let label: String
-    var icon: String? = nil
+    var icon: String?
     let isSelected: Bool
     let action: () -> Void
 

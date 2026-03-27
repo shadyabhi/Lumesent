@@ -97,7 +97,6 @@ enum AlertSoundName: String, Codable, CaseIterable {
     case sosumi = "Sosumi"
     case submarine = "Submarine"
     case tink = "Tink"
-
 }
 
 class AppSettings: ObservableObject {
@@ -113,7 +112,7 @@ class AppSettings: ObservableObject {
     /// Play a sound when a full-screen alert is shown.
     @Published var soundEnabled: Bool = false
     /// Which system sound to play; nil means the macOS default alert sound.
-    @Published var alertSound: AlertSoundName? = nil
+    @Published var alertSound: AlertSoundName?
 
     private let fileURL: URL
 
