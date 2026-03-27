@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct DismissKeyShortcut: Codable, Equatable {
@@ -97,7 +98,6 @@ enum AlertSoundName: String, Codable, CaseIterable {
     case submarine = "Submarine"
     case tink = "Tink"
 
-    var displayName: String { rawValue }
 }
 
 class AppSettings: ObservableObject {
@@ -125,6 +125,15 @@ class AppSettings: ObservableObject {
     var isPauseActive: Bool {
         guard let until = pauseAlertsUntil else { return false }
         return Date() < until
+    }
+
+    func playAlertSound() {
+        guard soundEnabled else { return }
+        if let name = alertSound {
+            NSSound(named: NSSound.Name(name.rawValue))?.play()
+        } else {
+            NSSound.beep()
+        }
     }
 
     func save() {

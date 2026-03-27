@@ -1911,19 +1911,14 @@ struct SettingsTab: View {
                                 Picker("Sound", selection: $appSettings.alertSound) {
                                     Text("System default").tag(AlertSoundName?.none)
                                     ForEach(AlertSoundName.allCases, id: \.self) { sound in
-                                        Text(sound.displayName).tag(Optional(sound))
+                                        Text(sound.rawValue).tag(Optional(sound))
                                     }
                                 }
                                 .labelsHidden()
                                 .frame(maxWidth: 180)
                                 .onChange(of: appSettings.alertSound) { _, _ in
                                     appSettings.save()
-                                    // Preview the selected sound
-                                    if let sound = appSettings.alertSound {
-                                        NSSound(named: NSSound.Name(sound.rawValue))?.play()
-                                    } else {
-                                        NSSound.beep()
-                                    }
+                                    appSettings.playAlertSound()
                                 }
                             }
                         }
