@@ -620,6 +620,27 @@ struct RulesTab: View {
                                 ruleStore.rules.removeAll { $0.id == id }
                                 save()
                             },
+                            onClone: {
+                                let original = ruleStore.rules[index]
+                                let clone = FilterRule(
+                                    appIdentifier: original.appIdentifier,
+                                    appOperator: original.appOperator,
+                                    titleContains: original.titleContains,
+                                    titleOperator: original.titleOperator,
+                                    subtitleContains: original.subtitleContains,
+                                    subtitleOperator: original.subtitleOperator,
+                                    bodyContains: original.bodyContains,
+                                    bodyOperator: original.bodyOperator,
+                                    isEnabled: original.isEnabled,
+                                    label: original.label,
+                                    ruleDescription: original.ruleDescription,
+                                    displayMode: original.displayMode,
+                                    focusSourceOnDismiss: original.focusSourceOnDismiss,
+                                    cooldownSeconds: original.cooldownSeconds
+                                )
+                                ruleStore.rules.insert(clone, at: index + 1)
+                                save()
+                            },
                             onSave: {
                                 editingRule = nil
                                 save()
@@ -820,6 +841,7 @@ struct RuleCard: View {
     let allLabels: [String]
     let onToggleEdit: () -> Void
     let onDelete: () -> Void
+    let onClone: () -> Void
     let onSave: () -> Void
     let onTestRule: () -> Void
 
@@ -915,6 +937,15 @@ struct RuleCard: View {
                 }
                 .accessibilityLabel(isEditing ? "Collapse rule" : "Expand rule")
                 .accessibilityAddTraits(.isButton)
+
+                Button(action: onClone) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clone this rule")
+                .accessibilityLabel("Clone rule")
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
