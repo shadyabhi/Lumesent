@@ -36,6 +36,21 @@ struct HistoryEntry: Codable, Identifiable {
         self.sourceVisibleSuppressed = sourceVisibleSuppressed
     }
 
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(appIdentifier, forKey: .appIdentifier)
+        try container.encode(appName, forKey: .appName)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(body, forKey: .body)
+        try container.encode(date, forKey: .date)
+        try container.encode(matched, forKey: .matched)
+        try container.encode(matchedRuleIds, forKey: .matchedRuleIds)
+        try container.encode(cooldownSuppressed, forKey: .cooldownSuppressed)
+        try container.encode(sourceVisibleSuppressed, forKey: .sourceVisibleSuppressed)
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
