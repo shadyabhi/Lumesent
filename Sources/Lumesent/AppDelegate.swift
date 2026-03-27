@@ -416,6 +416,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true) {
         flashMenuBarIcon()
+        appSettings.playAlertSound()
         FullScreenAlertWindow.show(
             notification: record,
             displayMode: displayMode,

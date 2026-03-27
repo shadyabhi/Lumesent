@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct DismissKeyShortcut: Codable, Equatable {
@@ -80,6 +81,25 @@ enum UpdateCheckInterval: Int, Codable, CaseIterable {
     }
 }
 
+/// System sound names available for alert playback.
+enum AlertSoundName: String, Codable, CaseIterable {
+    case basso = "Basso"
+    case blow = "Blow"
+    case bottle = "Bottle"
+    case frog = "Frog"
+    case funk = "Funk"
+    case glass = "Glass"
+    case hero = "Hero"
+    case morse = "Morse"
+    case ping = "Ping"
+    case pop = "Pop"
+    case purr = "Purr"
+    case sosumi = "Sosumi"
+    case submarine = "Submarine"
+    case tink = "Tink"
+
+}
+
 class AppSettings: ObservableObject {
     @Published var dismissKey: DismissKeyShortcut?
     @Published var showInDock: Bool = false
@@ -90,6 +110,10 @@ class AppSettings: ObservableObject {
     @Published var updateChannel: UpdateChannel = UpdateChannel.defaultForCurrentBuild
     @Published var updateCheckInterval: UpdateCheckInterval = .everyHour
     @Published var activeWindowBehavior: ActiveWindowBehavior = .downgrade
+    /// Play a sound when a full-screen alert is shown.
+    @Published var soundEnabled: Bool = false
+    /// Which system sound to play; nil means the macOS default alert sound.
+    @Published var alertSound: AlertSoundName? = nil
 
     private let fileURL: URL
 
@@ -103,6 +127,15 @@ class AppSettings: ObservableObject {
         return Date() < until
     }
 
+    func playAlertSound() {
+        guard soundEnabled else { return }
+        if let name = alertSound {
+            NSSound(named: NSSound.Name(name.rawValue))?.play()
+        } else {
+            NSSound.beep()
+        }
+    }
+
     func save() {
         do {
             let data = try JSONEncoder().encode(SettingsData(
@@ -113,7 +146,9 @@ class AppSettings: ObservableObject {
                 socketPath: socketPath == FileLocations.defaultSocketPath ? nil : socketPath,
                 updateChannel: updateChannel == .stable ? nil : updateChannel,
                 updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval,
-                activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior
+                activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior,
+                soundEnabled: soundEnabled ? true : nil,
+                alertSound: alertSound
             ))
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -138,6 +173,8 @@ class AppSettings: ObservableObject {
         updateChannel = decoded.updateChannel ?? UpdateChannel.defaultForCurrentBuild
         updateCheckInterval = decoded.updateCheckInterval ?? .everyHour
         activeWindowBehavior = decoded.activeWindowBehavior ?? .downgrade
+        soundEnabled = decoded.soundEnabled ?? false
+        alertSound = decoded.alertSound
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -150,5 +187,7 @@ class AppSettings: ObservableObject {
         var updateChannel: UpdateChannel?
         var updateCheckInterval: UpdateCheckInterval?
         var activeWindowBehavior: ActiveWindowBehavior?
+        var soundEnabled: Bool?
+        var alertSound: AlertSoundName?
     }
 }
