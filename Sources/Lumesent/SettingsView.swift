@@ -1253,36 +1253,78 @@ struct HistoryTab: View {
     @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
+    @State private var showMatchedOnly: Bool = false
+
     private var historyEntries: [HistoryEntry] {
-        history.entries.reversed()
+        let reversed = Array(history.entries.reversed())
+        if showMatchedOnly {
+            return reversed.filter { $0.matched && !$0.cooldownSuppressed && !$0.sourceVisibleSuppressed }
+        }
+        return reversed
     }
 
     var body: some View {
-        if historyEntries.isEmpty {
-            VStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.secondary.opacity(0.5))
-                Text("No notifications yet")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text("Notifications will appear here as they arrive.")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button(action: { showMatchedOnly = false }) {
+                    Text("All")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(!showMatchedOnly ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                        .foregroundStyle(!showMatchedOnly ? Color.white : Color.primary)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { showMatchedOnly = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 10))
+                        Text("Matched")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(showMatchedOnly ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                    .foregroundStyle(showMatchedOnly ? Color.white : Color.primary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollView {
-                SettingsDetailSectionCard(title: "Notification history") {
-                    LazyVStack(spacing: 8) {
-                        ForEach(historyEntries) { entry in
-                            HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            if historyEntries.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: showMatchedOnly ? "bell.slash" : "clock.arrow.circlepath")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                    Text(showMatchedOnly ? "No matched alerts yet" : "No notifications yet")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text(showMatchedOnly ? "Alerts that trigger your rules will appear here." : "Notifications will appear here as they arrive.")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    SettingsDetailSectionCard(title: showMatchedOnly ? "Matched notifications" : "Notification history") {
+                        LazyVStack(spacing: 8) {
+                            ForEach(historyEntries) { entry in
+                                HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
+                            }
                         }
                     }
+                    .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
-                .padding(.vertical, 12)
             }
         }
     }

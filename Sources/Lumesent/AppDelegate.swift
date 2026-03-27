@@ -3,10 +3,6 @@ import Combine
 import Sparkle
 import SwiftUI
 import UserNotifications
-private class HistoryEntryBox: NSObject {
-    let entry: HistoryEntry
-    init(_ entry: HistoryEntry) { self.entry = entry }
-}
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem!
@@ -211,95 +207,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         rebuildMenu()
     }
 
-    /// Compact row; full title and body appear in a submenu (opens on hover).
-    private func recentMatchMenuItem(for entry: HistoryEntry) -> NSMenuItem {
-        let headlineSource = entry.title.isEmpty ? entry.appName : entry.title
-        let truncatedHeadline: String
-        if headlineSource.count > 56 {
-            truncatedHeadline = String(headlineSource.prefix(53)) + "…"
-        } else {
-            truncatedHeadline = headlineSource
-        }
-        let when = relativeTime(entry.date)
-        let headline = "\(truncatedHeadline)  —  \(when)"
-
-        let parent = NSMenuItem(title: headline, action: #selector(replayHistoryEntry(_:)), keyEquivalent: "")
-        parent.target = self
-        parent.representedObject = HistoryEntryBox(entry)
-        parent.isEnabled = true
-
-        let sub = NSMenu(title: "")
-        populateNotificationDetailSubmenu(sub, entry: entry)
-        parent.submenu = sub
-        return parent
-    }
-
-    private func populateNotificationDetailSubmenu(_ menu: NSMenu, entry: HistoryEntry) {
-        func addDisabled(_ title: String) {
-            let it = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            it.isEnabled = false
-            menu.addItem(it)
-        }
-
-        addDisabled(entry.appName)
-        let titleText = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let subtitleText = entry.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let bodyText = entry.body.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !titleText.isEmpty {
-            menu.addItem(.separator())
-            for line in splitTextForMenuLines(titleText) {
-                addDisabled(line)
-            }
-        }
-        if !subtitleText.isEmpty {
-            menu.addItem(.separator())
-            for line in splitTextForMenuLines(subtitleText) {
-                addDisabled(line)
-            }
-        }
-        if !bodyText.isEmpty {
-            menu.addItem(.separator())
-            for line in splitTextForMenuLines(bodyText) {
-                addDisabled(line)
-            }
-        }
-    }
-
-    /// Wraps text into short lines suitable for menu item titles (single-line items).
-    private func splitTextForMenuLines(_ text: String, maxLen: Int = 56, maxLines: Int = 20) -> [String] {
-        var result: [String] = []
-        outer: for para in text.components(separatedBy: "\n") {
-            let trimmed = para.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-            var remaining = trimmed[...]
-            while !remaining.isEmpty {
-                if result.count >= maxLines - 1 {
-                    result.append("…")
-                    break outer
-                }
-                if remaining.count <= maxLen {
-                    result.append(String(remaining))
-                    break
-                }
-                let endIdx = remaining.index(remaining.startIndex, offsetBy: maxLen)
-                let window = remaining[..<endIdx]
-                if let spaceIdx = window.lastIndex(of: " ") {
-                    result.append(String(remaining[..<spaceIdx]))
-                    var after = remaining[remaining.index(after: spaceIdx)...]
-                    while after.first == " " { after = after.dropFirst() }
-                    remaining = after
-                } else {
-                    result.append(String(window))
-                    var after = remaining[endIdx...]
-                    while after.first == " " { after = after.dropFirst() }
-                    remaining = after
-                }
-            }
-        }
-        return result
-    }
-
     private func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
         menu.removeAllItems()
@@ -310,16 +217,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         menu.addItem(versionItem)
         menu.addItem(.separator())
 
-        let recent = notificationHistory.recentMatches(count: 5)
-        if recent.isEmpty {
-            let item = NSMenuItem(title: "No recent matches yet", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            menu.addItem(item)
-        } else {
-            for entry in recent {
-                menu.addItem(recentMatchMenuItem(for: entry))
-            }
-        }
+        let matchedCount = notificationHistory.entries.filter { $0.matched && !$0.cooldownSuppressed && !$0.sourceVisibleSuppressed }.count
+        let historyLabel = matchedCount == 0 ? "View History" : "View History (\(matchedCount) matched)"
+        let historyItem = NSMenuItem(title: historyLabel, action: #selector(navigateToHistory), keyEquivalent: "")
+        historyItem.target = self
+        menu.addItem(historyItem)
 
         menu.addItem(.separator())
 
@@ -539,28 +441,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         pruneExpiredCooldowns()
         AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: rule.displayMode), privacy: .public) focusSource=\(rule.focusSourceOnDismiss, privacy: .public)")
         presentAlert(for: record, displayMode: rule.displayMode, focusSourceOnDismiss: rule.focusSourceOnDismiss)
-    }
-
-    @objc private func replayHistoryEntry(_ sender: NSMenuItem) {
-        guard let box = sender.representedObject as? HistoryEntryBox else { return }
-        let entry = box.entry
-        let record = NotificationRecord(
-            id: -1,
-            appIdentifier: entry.appIdentifier,
-            title: entry.title,
-            subtitle: entry.subtitle,
-            body: entry.body,
-            deliveredDate: entry.date
-        )
-        // Look up the original rule's display mode, fall back to default timed
-        let displayMode: AlertDisplayMode
-        if let ruleId = entry.matchedRuleId,
-           let rule = ruleStore.rules.first(where: { $0.id == ruleId }) {
-            displayMode = rule.displayMode
-        } else {
-            displayMode = .defaultTimed
-        }
-        presentAlert(for: record, displayMode: displayMode)
     }
 
     @objc private func openSettings() {
