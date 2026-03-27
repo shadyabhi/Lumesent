@@ -1877,6 +1877,56 @@ struct SettingsTab: View {
                         .onChange(of: appSettings.activeWindowBehavior) { _, _ in
                             appSettings.save()
                         }
+
+                        Divider()
+
+                        Text("Sound")
+                            .font(.system(size: 13, weight: .medium))
+
+                        HStack(alignment: .top, spacing: 12) {
+                            Toggle("", isOn: $appSettings.soundEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.checkbox)
+                                .accessibilityLabel("Play sound on alert")
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Play sound on alert")
+                                    .font(.system(size: 13))
+                                Text("Plays a sound each time a full-screen alert is shown.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(captionColor)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .onChange(of: appSettings.soundEnabled) { _, _ in
+                            appSettings.save()
+                        }
+
+                        if appSettings.soundEnabled {
+                            HStack(spacing: 8) {
+                                Text("Sound:")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(captionColor)
+
+                                Picker("Sound", selection: $appSettings.alertSound) {
+                                    Text("System default").tag(AlertSoundName?.none)
+                                    ForEach(AlertSoundName.allCases, id: \.self) { sound in
+                                        Text(sound.displayName).tag(Optional(sound))
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(maxWidth: 180)
+                                .onChange(of: appSettings.alertSound) { _, _ in
+                                    appSettings.save()
+                                    // Preview the selected sound
+                                    if let sound = appSettings.alertSound {
+                                        NSSound(named: NSSound.Name(sound.rawValue))?.play()
+                                    } else {
+                                        NSSound.beep()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

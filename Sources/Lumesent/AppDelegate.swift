@@ -412,6 +412,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
     private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true) {
         flashMenuBarIcon()
+        if appSettings.soundEnabled {
+            if let soundName = appSettings.alertSound {
+                NSSound(named: NSSound.Name(soundName.rawValue))?.play()
+            } else {
+                NSSound.beep()
+            }
+        }
         FullScreenAlertWindow.show(
             notification: record,
             displayMode: displayMode,
