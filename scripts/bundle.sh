@@ -93,7 +93,10 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS
 find "$APP/Contents/Frameworks/Sparkle.framework" -name "*.xpc" -type d | while read -r xpc; do
     codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$xpc"
 done
-for helper in Autoupdate Updater; do
+# Sign Updater.app bundle (directory) before standalone helpers
+UPDATER_APP="$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+[ -d "$UPDATER_APP" ] && codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$UPDATER_APP"
+for helper in Autoupdate; do
     helper_path="$APP/Contents/Frameworks/Sparkle.framework/Versions/B/$helper"
     [ -f "$helper_path" ] && codesign --force --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$helper_path"
 done
