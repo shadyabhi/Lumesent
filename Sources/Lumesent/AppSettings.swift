@@ -81,6 +81,21 @@ enum UpdateCheckInterval: Int, Codable, CaseIterable {
     }
 }
 
+/// Where unattended full-screen alerts are mirrored (Settings → Mobile notification).
+enum MobileNotificationService: String, Codable, CaseIterable, Identifiable {
+    case off
+    case pushover
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .off: "Off"
+        case .pushover: "Pushover"
+        }
+    }
+}
+
 /// System sound names available for alert playback.
 enum AlertSoundName: String, Codable, CaseIterable {
     case basso = "Basso"
@@ -113,8 +128,26 @@ class AppSettings: ObservableObject {
     @Published var soundEnabled: Bool = false
     /// Which system sound to play; nil means the macOS default alert sound.
     @Published var alertSound: AlertSoundName?
+    /// Delivery channel for mobile escalation when an alert stays on screen (see per-rule delay).
+    @Published var mobileNotificationService: MobileNotificationService = .off
+    /// Pushover API application token (used when service is Pushover).
+    @Published var pushoverAppToken: String = ""
+    /// Pushover user key (used when service is Pushover).
+    @Published var pushoverUserKey: String = ""
 
     private let fileURL: URL
+
+    /// True when a mobile service is selected and its credentials are complete.
+    var mobileNotificationReady: Bool {
+        switch mobileNotificationService {
+        case .off:
+            return false
+        case .pushover:
+            let t = pushoverAppToken.trimmingCharacters(in: .whitespacesAndNewlines)
+            let u = pushoverUserKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !t.isEmpty && !u.isEmpty
+        }
+    }
 
     init() {
         fileURL = FileLocations.appSupportDirectory.appendingPathComponent("settings.json")
@@ -146,9 +179,20 @@ class AppSettings: ObservableObject {
             updateCheckInterval: updateCheckInterval == .everyHour ? nil : updateCheckInterval,
             activeWindowBehavior: activeWindowBehavior == .downgrade ? nil : activeWindowBehavior,
             soundEnabled: soundEnabled ? true : nil,
-            alertSound: alertSound
+            alertSound: alertSound,
+            mobileNotificationService: mobileNotificationService,
+            pushoverAppToken: pushoverAppToken.isEmpty ? nil : pushoverAppToken,
+            pushoverUserKey: pushoverUserKey.isEmpty ? nil : pushoverUserKey
         )
         FileLocations.saveJSON(payload, to: fileURL, label: "settings")
+        let notify = {
+            NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: "Saved")
+        }
+        if Thread.isMainThread {
+            notify()
+        } else {
+            DispatchQueue.main.async(execute: notify)
+        }
     }
 
     private func load() {
@@ -170,6 +214,15 @@ class AppSettings: ObservableObject {
         activeWindowBehavior = decoded.activeWindowBehavior ?? .downgrade
         soundEnabled = decoded.soundEnabled ?? false
         alertSound = decoded.alertSound
+        pushoverAppToken = decoded.pushoverAppToken ?? ""
+        pushoverUserKey = decoded.pushoverUserKey ?? ""
+        if let s = decoded.mobileNotificationService {
+            mobileNotificationService = s
+        } else {
+            let t = (decoded.pushoverAppToken ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let u = (decoded.pushoverUserKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            mobileNotificationService = (!t.isEmpty && !u.isEmpty) ? .pushover : .off
+        }
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }
 
@@ -184,5 +237,8 @@ class AppSettings: ObservableObject {
         var activeWindowBehavior: ActiveWindowBehavior?
         var soundEnabled: Bool?
         var alertSound: AlertSoundName?
+        var mobileNotificationService: MobileNotificationService?
+        var pushoverAppToken: String?
+        var pushoverUserKey: String?
     }
 }

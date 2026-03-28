@@ -185,6 +185,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
 
+        // Edit menu — required so Cut/Copy/Paste/Select All (⌘X/⌘C/⌘V/⌘A) reach the first responder
+        // in Settings and other text fields; a menu bar app with no Edit menu breaks keyboard paste.
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        let pastePlain = NSMenuItem(title: "Paste and Match Style", action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "v")
+        pastePlain.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(pastePlain)
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
         NSApp.mainMenu = mainMenu
     }
 
@@ -304,16 +318,92 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         }
     }
 
-    private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true) {
+    private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true, pushoverUnattendedAfterSeconds: Double? = nil) {
         flashMenuBarIcon()
         appSettings.playAlertSound()
+        let schedulePushover = pushoverUnattendedAfterSeconds.map { $0 > 0 } ?? false
+        let usePushover = schedulePushover && appSettings.mobileNotificationReady
+
+        if let sec = pushoverUnattendedAfterSeconds, sec > 0 {
+            if appSettings.mobileNotificationReady {
+                AppLog.shared.info("pushover: scheduling escalation after \(sec, privacy: .public)s (credentials OK)")
+            } else {
+                AppLog.shared.notice("pushover: would escalate after \(sec, privacy: .public)s — not scheduling (mobile service off or token/user empty)")
+            }
+        } else {
+            AppLog.shared.debug("pushover: no escalation — delay nil or 0")
+        }
+
+        // Timed dismiss must not run before the Pushover timer: default 8s would cancel the card and
+        // invalidate Pushover; equal intervals also race. Extend auto-dismiss past the escalation delay.
+        var effectiveDisplayMode = displayMode
+        if usePushover, let sec = pushoverUnattendedAfterSeconds, case .timed(let timeout) = displayMode {
+            let minDismiss = max(timeout, sec) + 1
+            if minDismiss > timeout {
+                effectiveDisplayMode = .timed(seconds: minDismiss)
+                AppLog.shared.info("pushover: auto-dismiss extended \(timeout, privacy: .public)s → \(minDismiss, privacy: .public)s so escalation can run at \(sec, privacy: .public)s")
+            }
+        } else if usePushover, displayMode.isSticky {
+            AppLog.shared.info("pushover: display is sticky — escalation timer independent of auto-dismiss")
+        }
+
         FullScreenAlertWindow.show(
             notification: record,
-            displayMode: displayMode,
+            displayMode: effectiveDisplayMode,
             dismissKey: appSettings.dismissKey,
             presentation: appSettings.alertPresentation,
-            focusSourceOnDismiss: focusSourceOnDismiss
+            focusSourceOnDismiss: focusSourceOnDismiss,
+            pushoverUnattendedAfterSeconds: usePushover ? pushoverUnattendedAfterSeconds : nil,
+            onPushoverUnattended: usePushover ? { [weak self] in
+                self?.sendPushoverEscalation(for: record)
+            } : nil
         )
+    }
+
+    /// Delay before Pushover for `Lumesent send` / socket alerts (no filter rule). Uses the minimum
+    /// positive “notify phone” delay among enabled rules when any exist; if every enabled rule has
+    /// phone off (0), skips; if there are no enabled rules yet, uses the same default as new rules (300s).
+    private func pushoverUnattendedSecondsForExternalFullscreen() -> Double? {
+        guard appSettings.mobileNotificationReady else { return nil }
+        let enabledRules = ruleStore.rules.filter(\.isEnabled)
+        let positiveDelays = enabledRules.compactMap { $0.pushoverUnattendedAfterSeconds > 0 ? $0.pushoverUnattendedAfterSeconds : nil }
+        if let m = positiveDelays.min() {
+            return m
+        }
+        if enabledRules.isEmpty {
+            return 300
+        }
+        return nil
+    }
+
+    private func sendPushoverEscalation(for record: NotificationRecord) {
+        AppLog.shared.info("pushover: sendPushoverEscalation entry app=\(record.appIdentifier, privacy: .public) title=\(record.title.prefix(120), privacy: .public)")
+        guard appSettings.mobileNotificationReady else {
+            AppLog.shared.notice("pushover: abort — mobileNotificationReady false")
+            return
+        }
+        let token = appSettings.pushoverAppToken
+        let user = appSettings.pushoverUserKey
+        guard !token.isEmpty, !user.isEmpty else {
+            AppLog.shared.notice("pushover: abort — empty token or user key after ready check")
+            return
+        }
+        let title = record.title.isEmpty ? "Lumesent" : record.title
+        var parts: [String] = []
+        if !record.subtitle.isEmpty { parts.append(record.subtitle) }
+        if !record.body.isEmpty { parts.append(record.body) }
+        let message = parts.isEmpty ? "Full-screen alert is still showing (unattended)." : parts.joined(separator: "\n")
+        AppLog.shared.info("pushover: POST api.pushover.net titleLen=\(title.count, privacy: .public) messageLen=\(message.count, privacy: .public) tokenLen=\(token.count, privacy: .public) userKeyLen=\(user.count, privacy: .public)")
+        PushoverClient.send(appToken: token, userKey: user, title: title, message: message) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    AppLog.shared.info("pushover: API success (200) title=\(record.title.prefix(80), privacy: .public)")
+                case .failure(let err):
+                    AppLog.shared.error("pushover: API failure \(err.localizedDescription, privacy: .public)")
+                }
+            }
+        }
     }
 
     private func shouldSuppressDuplicate(_ record: NotificationRecord) -> Bool {
@@ -365,7 +455,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         case .notification:
             postNativeNotification(record, focusSourceOnDismiss: focusSource)
         case .fullscreen:
-            presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focusSource)
+            let pushoverSec = pushoverUnattendedSecondsForExternalFullscreen()
+            let pushLog = pushoverSec.map { String($0) } ?? "off"
+            AppLog.shared.info("external fullscreen: pushoverUnattendedAfter=\(pushLog, privacy: .public) (CLI/socket — not from filter rules)")
+            presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focusSource, pushoverUnattendedAfterSeconds: pushoverSec)
         }
     }
 
@@ -460,8 +553,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         }
         let focusSource = activeRules.contains { $0.focusSourceOnDismiss }
 
-        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public) focusSource=\(focusSource, privacy: .public) activeRules=\(activeRules.count, privacy: .public)")
-        presentAlert(for: record, displayMode: displayMode, focusSourceOnDismiss: focusSource)
+        let pushoverCandidates = activeRules.compactMap { rule -> Double? in
+            rule.pushoverUnattendedAfterSeconds > 0 ? rule.pushoverUnattendedAfterSeconds : nil
+        }
+        let mergedPushoverSeconds: Double? = pushoverCandidates.isEmpty ? nil : pushoverCandidates.min()
+        if mergedPushoverSeconds != nil, !appSettings.mobileNotificationReady {
+            AppLog.shared.notice("MATCH — rule requests phone escalation but Pushover is off or keys missing; alert only")
+        }
+        if !pushoverCandidates.isEmpty {
+            let withPush = activeRules.filter { $0.pushoverUnattendedAfterSeconds > 0 }
+            let perRule = withPush.map { "\($0.id.uuidString.prefix(8)):\($0.pushoverUnattendedAfterSeconds)s" }.joined(separator: ",")
+            AppLog.shared.info("pushover: merged rule delays min=\(mergedPushoverSeconds.map { String($0) } ?? "n/a", privacy: .public) from [\(perRule, privacy: .public)]")
+        }
+
+        let pushoverAfterLog = mergedPushoverSeconds.map { String($0) } ?? "off"
+        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public) focusSource=\(focusSource, privacy: .public) activeRules=\(activeRules.count, privacy: .public) pushoverAfter=\(pushoverAfterLog, privacy: .public) mobileReady=\(self.appSettings.mobileNotificationReady, privacy: .public)")
+        presentAlert(for: record, displayMode: displayMode, focusSourceOnDismiss: focusSource, pushoverUnattendedAfterSeconds: mergedPushoverSeconds)
     }
 
     @objc private func openSettings() {

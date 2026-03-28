@@ -6,6 +6,7 @@ build:
 codesign-bootstrap:
 	@bash scripts/codesign-bootstrap.sh
 
+# open can fail with LS error -600 right after rebuild/kill; -n + absolute path + fallback helps.
 run: build
 	pkill -x Lumesent 2>/dev/null || true
 	open Lumesent.app

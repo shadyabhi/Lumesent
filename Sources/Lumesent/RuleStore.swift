@@ -14,8 +14,16 @@ class RuleStore: ObservableObject {
         Set(rules.compactMap { $0.label.isEmpty ? nil : $0.label }).sorted()
     }
 
-    func save() {
+    func save(feedbackMessage: String = "Saved") {
         FileLocations.saveJSON(rules, to: fileURL, label: "rules")
+        let notify = {
+            NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: feedbackMessage)
+        }
+        if Thread.isMainThread {
+            notify()
+        } else {
+            DispatchQueue.main.async(execute: notify)
+        }
     }
 
     func exportRulesJSON() throws -> Data {
@@ -26,7 +34,7 @@ class RuleStore: ObservableObject {
         let imported = try JSONDecoder().decode([FilterRule].self, from: data)
         AppLog.shared.info("imported \(imported.count, privacy: .public) rules")
         rules = imported
-        save()
+        save(feedbackMessage: "Rules imported")
     }
 
     private func load() {

@@ -11,6 +11,38 @@ private enum SettingsChromeLayout {
     static let detailContentHorizontalPadding: CGFloat = 24
 }
 
+/// Short-lived header confirmation when settings, rules, or history are persisted.
+private struct SettingsSavedFeedbackBadge: View {
+    let message: String
+
+    private var accent: Color {
+        Color(nsColor: .systemGreen)
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "checkmark.circle.fill")
+                .imageScale(.medium)
+            Text(message)
+                .lineLimit(1)
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(accent)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(accent.opacity(0.14))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(accent.opacity(0.38), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(message). Written to disk.")
+    }
+}
+
 enum SettingsSidebarItem: Hashable {
     case rulesActive
     case history
@@ -37,6 +69,9 @@ struct SettingsView: View {
 
     @State private var selectedSidebarItem: SettingsSidebarItem
     @StateObject private var logStore = LogStore()
+    @State private var showSavedIndicator = false
+    @State private var savedIndicatorMessage = "Saved"
+    @State private var savedIndicatorHideWorkItem: DispatchWorkItem?
 
     init(
         ruleStore: RuleStore,
@@ -67,11 +102,16 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Text(selectedSidebarItem.detailTitle)
                         .font(.system(size: 20, weight: .semibold))
+                    if showSavedIndicator {
+                        SettingsSavedFeedbackBadge(message: savedIndicatorMessage)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     Spacer(minLength: 8)
                     if permissionChecker.allGranted {
                         PermissionOKIndicator(permissionChecker: permissionChecker)
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: showSavedIndicator)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, SettingsChromeLayout.detailContentHorizontalPadding)
                 .padding(.trailing, SettingsChromeLayout.detailContentHorizontalPadding)
@@ -134,7 +174,7 @@ struct SettingsView: View {
                     Group {
                         switch selectedSidebarItem {
                         case .rulesActive:
-                            RulesTab(ruleStore: ruleStore, history: history, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
+                            RulesTab(ruleStore: ruleStore, history: history, appSettings: appSettings, onRulesChanged: onRulesChanged, onTestRule: onTestRule)
                         case .history:
                             HistoryTab(history: history, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
                         case .logs:
@@ -157,6 +197,25 @@ struct SettingsView: View {
                 selectedSidebarItem = item
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .lumesentDidPersistUserSettings)) { notification in
+            let message = (notification.object as? String) ?? "Saved"
+            flashSavedIndicator(message: message)
+        }
+    }
+
+    private func flashSavedIndicator(message: String = "Saved") {
+        savedIndicatorHideWorkItem?.cancel()
+        savedIndicatorMessage = message
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showSavedIndicator = true
+        }
+        let work = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showSavedIndicator = false
+            }
+        }
+        savedIndicatorHideWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.75, execute: work)
     }
 
     private func settingsSidebarRow(title: String, systemImage: String, item: SettingsSidebarItem) -> some View {
@@ -494,6 +553,7 @@ struct PermissionRow: View {
 struct RulesTab: View {
     @ObservedObject var ruleStore: RuleStore
     @ObservedObject var history: NotificationHistory
+    @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
     let onTestRule: (FilterRule) -> Void
 
@@ -606,6 +666,7 @@ struct RulesTab: View {
                             rule: $ruleStore.rules[index],
                             isEditing: editingRule?.id == ruleStore.rules[index].id,
                             history: history,
+                            appSettings: appSettings,
                             allLabels: allLabels,
                             onToggleEdit: {
                                 if editingRule?.id == ruleStore.rules[index].id {
@@ -700,11 +761,11 @@ struct RulesTab: View {
                     guard response == .OK, let url = panel.url else { return }
                     do {
                         try data.write(to: url, options: .atomic)
-                        importExportMessage = "Rules exported successfully."
+                        NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: "Rules exported")
                     } catch {
                         importExportMessage = "Export failed: \(error.localizedDescription)"
+                        showingImportExportAlert = true
                     }
-                    showingImportExportAlert = true
                 }
             }
         } catch {
@@ -724,11 +785,10 @@ struct RulesTab: View {
                     let data = try Data(contentsOf: url)
                     try ruleStore.importRules(from: data)
                     onRulesChanged(ruleStore.rules)
-                    importExportMessage = "Rules imported successfully."
                 } catch {
                     importExportMessage = "Import failed: \(error.localizedDescription)"
+                    showingImportExportAlert = true
                 }
-                showingImportExportAlert = true
             }
         }
     }
@@ -821,6 +881,7 @@ struct RuleCard: View {
     @Binding var rule: FilterRule
     let isEditing: Bool
     @ObservedObject var history: NotificationHistory
+    @ObservedObject var appSettings: AppSettings
     let allLabels: [String]
     let onToggleEdit: () -> Void
     let onDelete: () -> Void
@@ -834,6 +895,10 @@ struct RuleCard: View {
 
     private var matchedEntries: [HistoryEntry] {
         history.matchedEntries(for: rule.id)
+    }
+
+    private var mobileNotificationReady: Bool {
+        appSettings.mobileNotificationReady
     }
 
     /// Average matches per hour over the last 4 hours.
@@ -1051,6 +1116,32 @@ struct RuleCard: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(.tertiary)
                             }
+
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Notify phone:")
+                                    .frame(width: 80, alignment: .trailing)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                TextField("sec", value: $rule.pushoverUnattendedAfterSeconds, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12))
+                                    .frame(width: 60)
+                                    .disabled(!mobileNotificationReady)
+
+                                Text("sec")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+
+                                Text(mobileNotificationReady
+                                    ? "— notify phone if alert still showing; 0 = off"
+                                    : "— set Service and credentials in Settings → Mobile notification")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .opacity(mobileNotificationReady ? 1 : 0.45)
+                            .allowsHitTesting(mobileNotificationReady)
 
                             HStack {
                                 Text("On dismiss:")
@@ -1993,6 +2084,68 @@ struct SettingsTab: View {
                                 }
                             }
                         }
+                    }
+                }
+
+                SettingsDetailSectionCard(title: "Mobile notification") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("When a full-screen alert stays open and you are away from the Mac, mirror it to your phone. Set how long to wait on each rule (Alert → Notify phone).")
+                            .font(.system(size: 11))
+                            .foregroundStyle(captionColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("Service")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 72, alignment: .trailing)
+                            Picker("Service", selection: $appSettings.mobileNotificationService) {
+                                ForEach(MobileNotificationService.allCases) { service in
+                                    Text(service.displayName).tag(service)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 260, alignment: .leading)
+                            Spacer(minLength: 0)
+                        }
+
+                        if appSettings.mobileNotificationService == .pushover {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Sign in at pushover.net, then paste your API token and user key below.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(captionColor)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                HStack {
+                                    Text("Application token")
+                                        .frame(width: 120, alignment: .trailing)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(captionColor)
+                                    TextField("", text: $appSettings.pushoverAppToken)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(size: 11, design: .monospaced))
+                                }
+                                HStack {
+                                    Text("User key")
+                                        .frame(width: 120, alignment: .trailing)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(captionColor)
+                                    TextField("", text: $appSettings.pushoverUserKey)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(size: 11, design: .monospaced))
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                    .onChange(of: appSettings.mobileNotificationService) { _, _ in
+                        appSettings.save()
+                    }
+                    .onChange(of: appSettings.pushoverAppToken) { _, _ in
+                        appSettings.save()
+                    }
+                    .onChange(of: appSettings.pushoverUserKey) { _, _ in
+                        appSettings.save()
                     }
                 }
 

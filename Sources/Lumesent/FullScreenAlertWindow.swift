@@ -12,6 +12,7 @@ final class AlertGridModel: ObservableObject {
         let sourceContext: SourceContext?
         let appIdentifier: String?
         var timer: Timer?
+        var pushoverTimer: Timer?
     }
 
     @Published var cards: [CardItem] = []
@@ -37,7 +38,9 @@ final class FullScreenAlertWindow {
         displayMode: AlertDisplayMode = .defaultTimed,
         dismissKey: DismissKeyShortcut? = nil,
         presentation: AlertPresentation = .default,
-        focusSourceOnDismiss: Bool = true
+        focusSourceOnDismiss: Bool = true,
+        pushoverUnattendedAfterSeconds: Double? = nil,
+        onPushoverUnattended: (() -> Void)? = nil
     ) {
         let needsOverlay = managed.isEmpty
 
@@ -64,22 +67,52 @@ final class FullScreenAlertWindow {
             appIdentifier: notification.appIdentifier
         )
 
+        let cardId = card.id
+        let cardIdShort = String(cardId.uuidString.prefix(8))
+
         if let timeout = displayMode.timeoutSeconds {
-            let cardId = card.id
             card.timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { _ in
-                dismissCard(id: cardId)
+                AppLog.shared.info("alert: auto-dismiss timer fired card=\(cardIdShort, privacy: .public) after \(timeout, privacy: .public)s")
+                dismissCard(id: cardId, reason: "auto-dismiss")
             }
+        } else {
+            AppLog.shared.debug("alert: no auto-dismiss (sticky) card=\(cardIdShort, privacy: .public)")
+        }
+
+        if let seconds = pushoverUnattendedAfterSeconds, seconds > 0, let onPushover = onPushoverUnattended {
+            card.pushoverTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { _ in
+                let stillThere = gridModel.cards.contains(where: { $0.id == cardId })
+                if stillThere {
+                    AppLog.shared.info("pushover: escalation timer fired card=\(cardIdShort, privacy: .public) after \(seconds, privacy: .public)s — invoking API")
+                } else {
+                    AppLog.shared.notice("pushover: escalation timer fired but card=\(cardIdShort, privacy: .public) already gone — skip (race or manual dismiss)")
+                }
+                guard stillThere else { return }
+                onPushover()
+            }
+            AppLog.shared.info("pushover: escalation timer scheduled card=\(cardIdShort, privacy: .public) in \(seconds, privacy: .public)s")
+        } else if onPushoverUnattended != nil {
+            AppLog.shared.notice("pushover: onPushover set but delay nil or ≤0 — no timer")
         }
 
         gridModel.cards.append(card)
     }
 
-    static func dismissCard(id: UUID) {
-        guard let idx = gridModel.cards.firstIndex(where: { $0.id == id }) else { return }
+    static func dismissCard(id: UUID, reason: String = "manual") {
+        let idShort = String(id.uuidString.prefix(8))
+        guard let idx = gridModel.cards.firstIndex(where: { $0.id == id }) else {
+            AppLog.shared.debug("pushover: dismissCard id=\(idShort, privacy: .public) reason=\(reason, privacy: .public) — no such card")
+            return
+        }
         let card = gridModel.cards[idx]
+        let hadPushoverPending = card.pushoverTimer != nil
         card.timer?.invalidate()
+        card.pushoverTimer?.invalidate()
         gridModel.cards.remove(at: idx)
-        AppLog.shared.debug("alert card dismissed, \(gridModel.cards.count, privacy: .public) remaining")
+        if hadPushoverPending {
+            AppLog.shared.info("pushover: escalation cancelled (card removed) id=\(idShort, privacy: .public) reason=\(reason, privacy: .public) remaining=\(gridModel.cards.count, privacy: .public)")
+        }
+        AppLog.shared.debug("alert card dismissed id=\(idShort, privacy: .public) reason=\(reason, privacy: .public) remaining=\(gridModel.cards.count, privacy: .public)")
 
         if gridModel.cards.isEmpty {
             teardownOverlay(lastFocusSource: card.focusSourceOnDismiss, lastSourceContext: card.sourceContext, lastAppId: card.appIdentifier)
@@ -87,10 +120,16 @@ final class FullScreenAlertWindow {
     }
 
     static func dismiss() {
+        let n = gridModel.cards.count
+        let hadPushover = gridModel.cards.contains { $0.pushoverTimer != nil }
+        if hadPushover {
+            AppLog.shared.info("pushover: escalation cancelled (dismiss all) cards=\(n, privacy: .public)")
+        }
         AppLog.shared.debug("alert dismiss all called, \(gridModel.cards.count, privacy: .public) cards")
         let lastCard = gridModel.cards.last
         for card in gridModel.cards {
             card.timer?.invalidate()
+            card.pushoverTimer?.invalidate()
         }
         gridModel.cards.removeAll()
         teardownOverlay(

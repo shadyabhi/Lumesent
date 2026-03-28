@@ -120,6 +120,14 @@ class NotificationHistory: ObservableObject {
         saveTimer?.invalidate()
         saveTimer = nil
         save()
+        let notify = {
+            NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: "History cleared")
+        }
+        if Thread.isMainThread {
+            notify()
+        } else {
+            DispatchQueue.main.async(execute: notify)
+        }
     }
 
     /// Coalesces rapid save calls into a single write after 0.5s of inactivity.

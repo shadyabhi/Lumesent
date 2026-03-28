@@ -63,13 +63,15 @@ struct FilterRule: Identifiable, Codable, Equatable {
     var displayMode: AlertDisplayMode
     var focusSourceOnDismiss: Bool
     var cooldownSeconds: Double
+    /// If the full-screen alert is still showing after this many seconds, send a mobile notification (when configured in Settings). `0` disables for this rule. JSON key unchanged for compatibility.
+    var pushoverUnattendedAfterSeconds: Double
 
     /// Returns a copy with a new `id`, suitable for cloning.
     func cloned() -> FilterRule {
-        FilterRule(appIdentifier: appIdentifier, appOperator: appOperator, titleContains: titleContains, titleOperator: titleOperator, subtitleContains: subtitleContains, subtitleOperator: subtitleOperator, bodyContains: bodyContains, bodyOperator: bodyOperator, isEnabled: isEnabled, label: label, ruleDescription: ruleDescription, displayMode: displayMode, focusSourceOnDismiss: focusSourceOnDismiss, cooldownSeconds: cooldownSeconds)
+        FilterRule(appIdentifier: appIdentifier, appOperator: appOperator, titleContains: titleContains, titleOperator: titleOperator, subtitleContains: subtitleContains, subtitleOperator: subtitleOperator, bodyContains: bodyContains, bodyOperator: bodyOperator, isEnabled: isEnabled, label: label, ruleDescription: ruleDescription, displayMode: displayMode, focusSourceOnDismiss: focusSourceOnDismiss, cooldownSeconds: cooldownSeconds, pushoverUnattendedAfterSeconds: pushoverUnattendedAfterSeconds)
     }
 
-    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true, cooldownSeconds: Double = 60) {
+    init(id: UUID = UUID(), appIdentifier: String = "", appOperator: MatchOperator = .contains, titleContains: String = "", titleOperator: MatchOperator = .contains, subtitleContains: String = "", subtitleOperator: MatchOperator = .contains, bodyContains: String = "", bodyOperator: MatchOperator = .contains, isEnabled: Bool = true, label: String = "", ruleDescription: String = "", displayMode: AlertDisplayMode = .defaultTimed, focusSourceOnDismiss: Bool = true, cooldownSeconds: Double = 60, pushoverUnattendedAfterSeconds: Double = 300) {
         self.id = id
         self.appIdentifier = appIdentifier
         self.appOperator = appOperator
@@ -85,6 +87,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         self.displayMode = displayMode
         self.focusSourceOnDismiss = focusSourceOnDismiss
         self.cooldownSeconds = cooldownSeconds
+        self.pushoverUnattendedAfterSeconds = pushoverUnattendedAfterSeconds
     }
 
     init(from decoder: Decoder) throws {
@@ -104,6 +107,7 @@ struct FilterRule: Identifiable, Codable, Equatable {
         displayMode = try c.decode(AlertDisplayMode.self, forKey: .displayMode)
         focusSourceOnDismiss = try c.decodeIfPresent(Bool.self, forKey: .focusSourceOnDismiss) ?? true
         cooldownSeconds = try c.decodeIfPresent(Double.self, forKey: .cooldownSeconds) ?? 60
+        pushoverUnattendedAfterSeconds = try c.decodeIfPresent(Double.self, forKey: .pushoverUnattendedAfterSeconds) ?? 300
     }
 
     var isValid: Bool {
