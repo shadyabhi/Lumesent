@@ -271,7 +271,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         // Menu bar apps (LSUIElement) need to temporarily become a regular app
         // so that Sparkle's update dialog appears in front of other windows.
         // The activation policy is reverted back to .accessory by the Sparkle delegate
-        // callbacks (standardUserDriverDidReceiveUserAttention or didAbortWithError).
+        // callbacks (standardUserDriverWillFinishUpdateSession or didAbortWithError).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         updaterController.checkForUpdates(sender)
@@ -625,6 +625,12 @@ extension AppDelegate: SPUStandardUserDriverDelegate {
     }
 
     func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        // Don't revert activation policy here — the update dialog is still visible.
+        // Reverting to .accessory causes the dialog to vanish immediately.
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        // Revert to accessory app after the user dismisses/skips the update dialog.
         if !appSettings.showInDock {
             NSApp.setActivationPolicy(.accessory)
         }
