@@ -80,6 +80,69 @@ struct HistoryEntry: Codable, Identifiable {
     }
 }
 
+/// Quick filter chips in Settings → History (same buckets as row badges in `HistoryRow`).
+enum HistoryQuickFilter: Int, CaseIterable, Identifiable {
+    case all
+    case matched
+    case cooldown
+    case downgraded
+    case speedyDismiss
+    case unmatched
+
+    var id: Int { rawValue }
+
+    var chipTitle: String {
+        switch self {
+        case .all: return "All"
+        case .matched: return "Matched"
+        case .cooldown: return "Cooldown"
+        case .downgraded: return "Downgraded"
+        case .speedyDismiss: return "Speedy dismiss"
+        case .unmatched: return "Unmatched"
+        }
+    }
+
+    var chipIcon: String? {
+        switch self {
+        case .all: return nil
+        case .matched: return "bell.fill"
+        case .cooldown: return "clock.arrow.circlepath"
+        case .downgraded: return "arrow.down.right.circle"
+        case .speedyDismiss: return "bolt.fill"
+        case .unmatched: return "bell.slash"
+        }
+    }
+
+    /// Shown as the hover tooltip for the filter chip (Settings → History).
+    var chipHelp: String {
+        switch self {
+        case .all:
+            return "Show every stored notification, newest first."
+        case .matched:
+            return "Only entries where a rule matched and an alert was shown (not cooldown- or source-suppressed)."
+        case .cooldown:
+            return "Only entries that matched a rule but were skipped because that rule’s cooldown had not elapsed."
+        case .downgraded:
+            return "Only entries where a full-screen alert was downgraded or suppressed because the source window or pane was already visible."
+        case .speedyDismiss:
+            return "Only placeholder entries for notifications the system removed from the database before Lumesent could read them."
+        case .unmatched:
+            return "Only notifications that did not match any enabled rule."
+        }
+    }
+}
+
+extension HistoryEntry {
+    /// Mutually exclusive category for quick filters (priority matches `HistoryRow` badge order).
+    var quickFilterCategory: HistoryQuickFilter {
+        if historyLabel == "speedy_dismiss" { return .speedyDismiss }
+        if sourceVisibleSuppressed { return .downgraded }
+        if cooldownSuppressed { return .cooldown }
+        if isDisplayableMatch { return .matched }
+        return .unmatched
+    }
+}
+
 class NotificationHistory: ObservableObject {
     @Published private(set) var entries: [HistoryEntry] = []
 

@@ -1384,36 +1384,46 @@ struct HistoryTab: View {
     @ObservedObject var appSettings: AppSettings
     let onRulesChanged: ([FilterRule]) -> Void
 
-    @State private var showMatchedOnly: Bool = false
+    @State private var quickFilter: HistoryQuickFilter = .all
 
     private var historyEntries: [HistoryEntry] {
-        if showMatchedOnly {
-            return history.entries.reversed().filter(\.isDisplayableMatch)
+        let reversed = history.entries.reversed()
+        if quickFilter == .all {
+            return Array(reversed)
         }
-        return Array(history.entries.reversed())
+        return reversed.filter { $0.quickFilterCategory == quickFilter }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                FilterChip(label: "All", isSelected: !showMatchedOnly) { showMatchedOnly = false }
-                FilterChip(label: "Matched", icon: "bell.fill", isSelected: showMatchedOnly) { showMatchedOnly = true }
-                Spacer()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(HistoryQuickFilter.allCases) { filter in
+                        FilterChip(
+                            label: filter.chipTitle,
+                            icon: filter.chipIcon,
+                            isSelected: quickFilter == filter
+                        ) {
+                            quickFilter = filter
+                        }
+                        .help(filter.chipHelp)
+                    }
+                }
+                .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
             }
-            .padding(.horizontal, SettingsChromeLayout.detailContentHorizontalPadding)
             .padding(.vertical, 8)
 
             Divider()
 
             if historyEntries.isEmpty {
                 VStack(spacing: 14) {
-                    Image(systemName: showMatchedOnly ? "bell.slash" : "clock.arrow.circlepath")
+                    Image(systemName: historyEmptyIcon)
                         .font(.system(size: 40))
                         .foregroundStyle(.secondary.opacity(0.5))
-                    Text(showMatchedOnly ? "No matched alerts yet" : "No notifications yet")
+                    Text(historyEmptyTitle)
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                    Text(showMatchedOnly ? "Alerts that trigger your rules will appear here." : "Notifications will appear here as they arrive.")
+                    Text(historyEmptySubtitle)
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -1421,7 +1431,7 @@ struct HistoryTab: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    SettingsDetailSectionCard(title: showMatchedOnly ? "Matched notifications" : "Notification history") {
+                    SettingsDetailSectionCard(title: historySectionTitle) {
                         LazyVStack(spacing: 8) {
                             ForEach(historyEntries) { entry in
                                 HistoryRow(entry: entry, ruleStore: ruleStore, appSettings: appSettings, onRulesChanged: onRulesChanged)
@@ -1432,6 +1442,50 @@ struct HistoryTab: View {
                     .padding(.vertical, 12)
                 }
             }
+        }
+    }
+
+    private var historySectionTitle: String {
+        switch quickFilter {
+        case .all: return "Notification history"
+        case .matched: return "Matched notifications"
+        case .cooldown: return "Cooldown"
+        case .downgraded: return "Downgraded (active window)"
+        case .speedyDismiss: return "Speedy dismiss"
+        case .unmatched: return "Unmatched notifications"
+        }
+    }
+
+    private var historyEmptyTitle: String {
+        switch quickFilter {
+        case .all: return "No notifications yet"
+        case .matched: return "No matched alerts yet"
+        case .cooldown: return "No cooldown entries yet"
+        case .downgraded: return "No downgraded entries yet"
+        case .speedyDismiss: return "No speedy dismiss entries yet"
+        case .unmatched: return "No unmatched notifications yet"
+        }
+    }
+
+    private var historyEmptySubtitle: String {
+        switch quickFilter {
+        case .all: return "Notifications will appear here as they arrive."
+        case .matched: return "Alerts that trigger your rules will appear here."
+        case .cooldown: return "Matches skipped by rule cooldown will appear here."
+        case .downgraded: return "Full-screen alerts downgraded while the source pane was visible will appear here."
+        case .speedyDismiss: return "Notifications removed from the database before capture will appear here."
+        case .unmatched: return "Notifications that did not match any rule will appear here."
+        }
+    }
+
+    private var historyEmptyIcon: String {
+        switch quickFilter {
+        case .all: return "clock.arrow.circlepath"
+        case .matched: return "bell.slash"
+        case .cooldown: return "clock.arrow.circlepath"
+        case .downgraded: return "arrow.down.right.circle"
+        case .speedyDismiss: return "bolt.slash"
+        case .unmatched: return "bell.slash"
         }
     }
 }

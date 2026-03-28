@@ -198,7 +198,7 @@ final class NotificationMonitor: ObservableObject {
         axBurstGeneration += 1
         let gen = axBurstGeneration
         /// Delays after each failed fetch. Five attempts: one immediate, then four delayed.
-        let gaps: [TimeInterval] = [0.05, 0.05, 0.1, 0.2]
+        let gaps: [TimeInterval] = [0.02, 0.02, 0.05, 0.08]
 
         func step(_ phase: Int) {
             dbQueue.async { [weak self] in
@@ -276,8 +276,8 @@ final class NotificationMonitor: ObservableObject {
     // MARK: - Fallback Timer
 
     private func startFallbackTimer() {
-        AppLog.shared.info("fallback poll timer started (2s interval)")
-        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        AppLog.shared.info("fallback poll timer started (1s interval)")
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self else { return }
             // AX observer check stays on main — axObserver is only touched on main.
             if self.axObserver == nil && AXIsProcessTrusted() {
