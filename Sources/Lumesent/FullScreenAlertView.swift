@@ -101,10 +101,8 @@ struct AlertCardView: View {
             }
 
             if !card.notification.body.isEmpty {
-                Text(card.notification.body)
-                    .font(.system(size: bodySize))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .multilineTextAlignment(.center)
+                markdownText(card.notification.body, fontSize: bodySize)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Button("Dismiss") { onDismiss() }
@@ -174,12 +172,199 @@ struct AlertCardView: View {
         }
     }
 
+    private func markdownText(_ string: String, fontSize: CGFloat) -> some View {
+        MarkdownTextView(
+            string: string,
+            fontSize: fontSize,
+            textColor: NSColor.white.withAlphaComponent(0.85),
+            maxWidth: (layout == .banner ? 340 : 400) - (layout == .banner ? 32 : 48)
+        )
+    }
+
     private var appIcon: NSImage? {
         guard card.notification.appIdentifier != "external" else { return nil }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: card.notification.appIdentifier) else {
             return nil
         }
         return NSWorkspace.shared.icon(forFile: url.path)
+    }
+}
+
+// MARK: - Markdown rendering
+
+/// Self-sizing NSTextView wrapper that renders CommonMark markdown with proper
+/// block-level support (code blocks, headers, lists, blockquotes) plus inline
+/// styling (bold, italic, inline code with background).
+struct MarkdownTextView: NSViewRepresentable {
+    let string: String
+    let fontSize: CGFloat
+    let textColor: NSColor
+    let maxWidth: CGFloat
+
+    func makeNSView(context: Context) -> SelfSizingTextView {
+        let tv = SelfSizingTextView(maxLayoutWidth: maxWidth)
+        tv.isEditable = false
+        tv.isSelectable = false
+        tv.drawsBackground = false
+        tv.textContainerInset = .zero
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.textContainer?.widthTracksTextView = true
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        tv.setContentHuggingPriority(.required, for: .vertical)
+        return tv
+    }
+
+    func updateNSView(_ tv: SelfSizingTextView, context: Context) {
+        tv.maxLayoutWidth = maxWidth
+        tv.textContainer?.size = NSSize(width: maxWidth, height: .greatestFiniteMagnitude)
+        tv.textStorage?.setAttributedString(MarkdownRenderer.render(
+            string, fontSize: fontSize, textColor: textColor, maxWidth: maxWidth
+        ))
+        tv.invalidateIntrinsicContentSize()
+    }
+}
+
+/// NSTextView subclass that reports its intrinsic height based on laid-out text.
+final class SelfSizingTextView: NSTextView {
+    var maxLayoutWidth: CGFloat
+
+    init(maxLayoutWidth: CGFloat) {
+        self.maxLayoutWidth = maxLayoutWidth
+        let container = NSTextContainer(size: NSSize(width: maxLayoutWidth, height: .greatestFiniteMagnitude))
+        let layoutManager = NSLayoutManager()
+        let storage = NSTextStorage()
+        layoutManager.addTextContainer(container)
+        storage.addLayoutManager(layoutManager)
+        container.widthTracksTextView = true
+        super.init(frame: .zero, textContainer: container)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: NSSize {
+        guard let lm = layoutManager, let tc = textContainer else { return .zero }
+        lm.ensureLayout(for: tc)
+        let rect = lm.usedRect(for: tc)
+        return NSSize(width: maxLayoutWidth, height: ceil(rect.height))
+    }
+}
+
+/// Converts a markdown string into an NSAttributedString with styled block and
+/// inline elements suitable for display in a dark alert card.
+enum MarkdownRenderer {
+    static func render(_ markdown: String, fontSize: CGFloat, textColor: NSColor, maxWidth: CGFloat) -> NSAttributedString {
+        guard let parsed = try? AttributedString(
+            markdown: markdown,
+            options: .init(interpretedSyntax: .full)
+        ) else {
+            return plain(markdown, fontSize: fontSize, textColor: textColor)
+        }
+
+        let baseFont = NSFont.systemFont(ofSize: fontSize)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.9, weight: .regular)
+        let codeBg = NSColor.white.withAlphaComponent(0.12)
+        let result = NSMutableAttributedString()
+
+        for run in parsed.runs {
+            let text = String(parsed[run.range].characters)
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+
+            var font: NSFont = baseFont
+            var fgColor: NSColor = textColor
+            var bgColor: NSColor? = nil
+
+            // --- Block-level intent ---
+            if let intent = run.presentationIntent {
+                for component in intent.components {
+                    switch component.kind {
+                    case .header(let level):
+                        let sizes: [CGFloat] = [1.6, 1.35, 1.15, 1.0, 0.9, 0.85]
+                        let scale = sizes[min(level - 1, sizes.count - 1)]
+                        font = NSFont.systemFont(ofSize: fontSize * scale, weight: level <= 2 ? .bold : .semibold)
+                    case .codeBlock:
+                        font = NSFont.monospacedSystemFont(ofSize: fontSize * 0.9, weight: .regular)
+                        bgColor = codeBg
+                        paraStyle.alignment = .left
+                        paraStyle.headIndent = 8
+                        paraStyle.firstLineHeadIndent = 8
+                        paraStyle.tailIndent = -8
+                    case .blockQuote:
+                        fgColor = textColor.withAlphaComponent(0.65)
+                        paraStyle.headIndent = 16
+                        paraStyle.firstLineHeadIndent = 16
+                    case .orderedList, .unorderedList:
+                        paraStyle.headIndent = 20
+                        paraStyle.firstLineHeadIndent = 8
+                        paraStyle.alignment = .left
+                    case .listItem(let ordinal):
+                        let bullet = ordinal > 0 ? "\(ordinal). " : "• "
+                        let bulletAttr = NSAttributedString(string: bullet, attributes: [
+                            .font: baseFont,
+                            .foregroundColor: textColor.withAlphaComponent(0.6),
+                            .paragraphStyle: paraStyle,
+                        ])
+                        result.append(bulletAttr)
+                    case .thematicBreak:
+                        let hr = NSMutableAttributedString(string: "\n―――\n", attributes: [
+                            .font: NSFont.systemFont(ofSize: fontSize * 0.8),
+                            .foregroundColor: textColor.withAlphaComponent(0.3),
+                            .paragraphStyle: paraStyle,
+                        ])
+                        result.append(hr)
+                        continue
+                    default:
+                        break
+                    }
+                }
+            }
+
+            // --- Inline intent ---
+            if let inline = run.inlinePresentationIntent {
+                if inline.contains(.code) {
+                    font = codeFont
+                    bgColor = codeBg
+                }
+                if inline.contains(.stronglyEmphasized) {
+                    font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+                }
+                if inline.contains(.emphasized) {
+                    font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+                }
+                if inline.contains(.strikethrough) {
+                    // handled below via attribute
+                }
+            }
+
+            var attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: fgColor,
+                .paragraphStyle: paraStyle,
+            ]
+            if let bg = bgColor {
+                attrs[.backgroundColor] = bg
+            }
+            if run.inlinePresentationIntent?.contains(.strikethrough) == true {
+                attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                attrs[.strikethroughColor] = fgColor
+            }
+
+            result.append(NSAttributedString(string: text, attributes: attrs))
+        }
+
+        return result
+    }
+
+    private static func plain(_ string: String, fontSize: CGFloat, textColor: NSColor) -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        return NSAttributedString(string: string, attributes: [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: textColor,
+            .paragraphStyle: style,
+        ])
     }
 }
 
