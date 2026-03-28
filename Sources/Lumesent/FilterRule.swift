@@ -92,10 +92,8 @@ struct FilterRule: Identifiable, Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // id and appIdentifier are truly required — a rule without them is meaningless
         id = try c.decode(UUID.self, forKey: .id)
         appIdentifier = try c.decode(String.self, forKey: .appIdentifier)
-        // Everything else uses decodeIfPresent with sensible defaults for forward-compatibility
         appOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .appOperator) ?? .contains
         titleContains = try c.decodeIfPresent(String.self, forKey: .titleContains) ?? ""
         titleOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .titleOperator) ?? .contains

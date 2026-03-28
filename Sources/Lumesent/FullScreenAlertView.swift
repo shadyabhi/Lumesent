@@ -123,6 +123,9 @@ struct AlertCardView: View {
         .onAppear {
             startTimer()
             resolvedAppIcon = Self.resolveAppIcon(for: card.notification.appIdentifier)
+            withAnimation(.easeOut(duration: 0.25)) {
+                appeared = true
+            }
         }
         .onDisappear { timer?.invalidate() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -142,11 +145,6 @@ struct AlertCardView: View {
         .shadow(color: .black.opacity(0.4), radius: 30, y: 12)
         .scaleEffect(appeared ? 1.0 : 0.85)
         .opacity(appeared ? 1.0 : 0.0)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.25)) {
-                appeared = true
-            }
-        }
     }
 
     @ViewBuilder

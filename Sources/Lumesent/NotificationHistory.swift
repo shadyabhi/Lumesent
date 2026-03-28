@@ -14,6 +14,8 @@ struct HistoryEntry: Codable, Identifiable {
     var cooldownSuppressed: Bool = false
     var sourceVisibleSuppressed: Bool = false
 
+    var displayAppName: String { appName.isEmpty ? appIdentifier : appName }
+
     /// First matched rule ID, for backwards compatibility.
     var matchedRuleId: UUID? { matchedRuleIds.first }
 
@@ -98,7 +100,6 @@ class NotificationHistory: ObservableObject {
             cooldownSuppressed: cooldownSuppressed,
             sourceVisibleSuppressed: sourceVisibleSuppressed
         )
-        AppLog.shared.info("history: recording app=\(notification.appName, privacy: .public) (\(notification.appIdentifier, privacy: .public)) title=\(notification.title, privacy: .public) subtitle=\(notification.subtitle, privacy: .public) time=\(notification.deliveredDate.description, privacy: .public) matched=\(matched, privacy: .public)")
         entries.append(entry)
 
         if entries.count > Self.maxEntries {

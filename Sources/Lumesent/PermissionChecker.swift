@@ -13,9 +13,7 @@ final class PermissionChecker: ObservableObject {
     var allGranted: Bool { hasFullDiskAccess && hasAccessibility }
 
     init() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        dbPath = "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
-        AppLog.shared.info("permission checker init — dbPath=\(self.dbPath, privacy: .public)")
+        dbPath = FileLocations.notificationDBPath
         check()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.check()

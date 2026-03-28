@@ -1455,7 +1455,7 @@ struct HistoryRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(entry.appName.isEmpty ? entry.appIdentifier : entry.appName)
+                    Text(entry.displayAppName)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -1835,7 +1835,7 @@ struct NotificationPreview: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(entry.appName.isEmpty ? entry.appIdentifier : entry.appName)
+                    Text(entry.displayAppName)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -1881,9 +1881,18 @@ struct SettingsTab: View {
     @State private var showingClearHistoryConfirmation = false
     @State private var editingSocketPath: String = ""
     @State private var isEditingSocketPath: Bool = false
+    @State private var draftPushoverToken: String = ""
+    @State private var draftPushoverUserKey: String = ""
 
     /// AppKit label color: reliable on grouped controls; `.secondary` inside `Toggle` labels can render nearly invisible on macOS.
     private var captionColor: Color { Color(nsColor: .secondaryLabelColor) }
+
+    private func commitPushoverCredentials() {
+        guard draftPushoverToken != appSettings.pushoverAppToken || draftPushoverUserKey != appSettings.pushoverUserKey else { return }
+        appSettings.pushoverAppToken = draftPushoverToken
+        appSettings.pushoverUserKey = draftPushoverUserKey
+        appSettings.save()
+    }
 
     private var layoutBinding: Binding<AlertLayout> {
         Binding(
@@ -2034,7 +2043,7 @@ struct SettingsTab: View {
                         .labelsHidden()
                         .pickerStyle(.radioGroup)
                         .onChange(of: appSettings.activeWindowBehavior) { _, _ in
-                            appSettings.save()
+                            appSettings.debouncedSave()
                         }
 
                         Divider()
@@ -2058,7 +2067,7 @@ struct SettingsTab: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .onChange(of: appSettings.soundEnabled) { _, _ in
-                            appSettings.save()
+                            appSettings.debouncedSave()
                         }
 
                         if appSettings.soundEnabled {
@@ -2076,7 +2085,7 @@ struct SettingsTab: View {
                                 .labelsHidden()
                                 .frame(maxWidth: 180)
                                 .onChange(of: appSettings.alertSound) { _, _ in
-                                    appSettings.save()
+                                    appSettings.debouncedSave()
                                     appSettings.playAlertSound()
                                 }
                             }
@@ -2118,31 +2127,32 @@ struct SettingsTab: View {
                                         .frame(width: 120, alignment: .trailing)
                                         .font(.system(size: 12))
                                         .foregroundStyle(captionColor)
-                                    TextField("", text: $appSettings.pushoverAppToken)
+                                    TextField("", text: $draftPushoverToken)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 11, design: .monospaced))
+                                        .onSubmit { commitPushoverCredentials() }
                                 }
                                 HStack {
                                     Text("User key")
                                         .frame(width: 120, alignment: .trailing)
                                         .font(.system(size: 12))
                                         .foregroundStyle(captionColor)
-                                    TextField("", text: $appSettings.pushoverUserKey)
+                                    TextField("", text: $draftPushoverUserKey)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 11, design: .monospaced))
+                                        .onSubmit { commitPushoverCredentials() }
                                 }
                             }
                             .padding(.top, 2)
+                            .onAppear {
+                                draftPushoverToken = appSettings.pushoverAppToken
+                                draftPushoverUserKey = appSettings.pushoverUserKey
+                            }
+                            .onDisappear { commitPushoverCredentials() }
                         }
                     }
                     .onChange(of: appSettings.mobileNotificationService) { _, _ in
-                        appSettings.save()
-                    }
-                    .onChange(of: appSettings.pushoverAppToken) { _, _ in
-                        appSettings.save()
-                    }
-                    .onChange(of: appSettings.pushoverUserKey) { _, _ in
-                        appSettings.save()
+                        appSettings.debouncedSave()
                     }
                 }
 
@@ -2164,7 +2174,7 @@ struct SettingsTab: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .onChange(of: appSettings.showInDock) { _, _ in
-                            appSettings.save()
+                            appSettings.debouncedSave()
                         }
 
                         Divider()
@@ -2185,7 +2195,7 @@ struct SettingsTab: View {
                                     if editingSocketPath != appSettings.socketPath {
                                         Button("Save") {
                                             appSettings.socketPath = editingSocketPath
-                                            appSettings.save()
+                                            appSettings.debouncedSave()
                                             isEditingSocketPath = false
                                         }
                                         .buttonStyle(.bordered)
@@ -2202,7 +2212,7 @@ struct SettingsTab: View {
                                     Button("Reset") {
                                         editingSocketPath = FileLocations.defaultSocketPath
                                         appSettings.socketPath = FileLocations.defaultSocketPath
-                                        appSettings.save()
+                                        appSettings.debouncedSave()
                                         isEditingSocketPath = false
                                     }
                                     .buttonStyle(.bordered)
@@ -2245,13 +2255,13 @@ struct SettingsTab: View {
                         }
                     }
                     .onChange(of: appSettings.updateChannel) { _, _ in
-                        appSettings.save()
+                        appSettings.debouncedSave()
                         if let delegate = NSApp.delegate as? AppDelegate {
                             delegate.updaterController.checkForUpdates(nil)
                         }
                     }
                     .onChange(of: appSettings.updateCheckInterval) { _, newValue in
-                        appSettings.save()
+                        appSettings.debouncedSave()
                         if let delegate = NSApp.delegate as? AppDelegate {
                             delegate.updaterController.updater.updateCheckInterval = TimeInterval(newValue.rawValue)
                         }
@@ -2271,7 +2281,7 @@ struct SettingsTab: View {
                             if appSettings.dismissKey != nil {
                                 Button("Clear") {
                                     appSettings.dismissKey = nil
-                                    appSettings.save()
+                                    appSettings.debouncedSave()
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
@@ -2330,10 +2340,10 @@ struct SettingsTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onChange(of: appSettings.dismissKey) { _, _ in
-            appSettings.save()
+            appSettings.debouncedSave()
         }
         .onChange(of: appSettings.alertPresentation) { _, _ in
-            appSettings.save()
+            appSettings.debouncedSave()
         }
         .alert("Login Service", isPresented: $showingServiceStatus) {
             Button("OK") {}
@@ -2836,6 +2846,12 @@ struct StatusBadge: View {
 
 // MARK: - Helpers
 
+private let shortDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateStyle = .short
+    return f
+}()
+
 func relativeTime(_ date: Date) -> String {
     let seconds = max(0, Int(-date.timeIntervalSinceNow))
     if seconds < 60 { return "just now" }
@@ -2845,7 +2861,5 @@ func relativeTime(_ date: Date) -> String {
     if hours < 24 { return "\(hours)h ago" }
     let days = hours / 24
     if days < 7 { return "\(days)d ago" }
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    return formatter.string(from: date)
+    return shortDateFormatter.string(from: date)
 }

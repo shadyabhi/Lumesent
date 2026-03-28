@@ -136,16 +136,18 @@ class AppSettings: ObservableObject {
     @Published var pushoverUserKey: String = ""
 
     private let fileURL: URL
+    private var saveTimer: Timer?
+
+    private static func pushoverCredentialsPresent(token: String, userKey: String) -> Bool {
+        !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !userKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     /// True when a mobile service is selected and its credentials are complete.
     var mobileNotificationReady: Bool {
         switch mobileNotificationService {
-        case .off:
-            return false
-        case .pushover:
-            let t = pushoverAppToken.trimmingCharacters(in: .whitespacesAndNewlines)
-            let u = pushoverUserKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            return !t.isEmpty && !u.isEmpty
+        case .off: return false
+        case .pushover: return Self.pushoverCredentialsPresent(token: pushoverAppToken, userKey: pushoverUserKey)
         }
     }
 
@@ -168,7 +170,16 @@ class AppSettings: ObservableObject {
         }
     }
 
+    /// Coalesces rapid save calls into a single write after 0.3s of inactivity.
+    func debouncedSave() {
+        saveTimer?.invalidate()
+        saveTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+            self?.save()
+        }
+    }
+
     func save() {
+        saveTimer?.invalidate()
         let payload = SettingsData(
             dismissKey: dismissKey,
             showInDock: showInDock,
@@ -212,9 +223,10 @@ class AppSettings: ObservableObject {
         if let s = decoded.mobileNotificationService {
             mobileNotificationService = s
         } else {
-            let t = (decoded.pushoverAppToken ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let u = (decoded.pushoverUserKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            mobileNotificationService = (!t.isEmpty && !u.isEmpty) ? .pushover : .off
+            // Migration: infer service from presence of credentials in older config files.
+            mobileNotificationService = Self.pushoverCredentialsPresent(
+                token: decoded.pushoverAppToken ?? "", userKey: decoded.pushoverUserKey ?? ""
+            ) ? .pushover : .off
         }
         AppLog.shared.info("settings loaded — dock=\(self.showInDock, privacy: .public) layout=\(String(describing: self.alertPresentation.layout), privacy: .public) paused=\(self.isPauseActive, privacy: .public)")
     }

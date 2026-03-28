@@ -85,8 +85,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             }
             .store(in: &cancellables)
 
-        // alertPresentation is saved by SettingsTab's .onChange handler; no Combine sink needed here.
-
         updateMenuBarIcon()
 
         AppLog.shared.info("app startup complete — FDA=\(self.permissionChecker.hasFullDiskAccess, privacy: .public) AX=\(self.permissionChecker.hasAccessibility, privacy: .public) paused=\(self.appSettings.isPauseActive, privacy: .public)")
@@ -318,30 +316,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private func presentAlert(for record: NotificationRecord, displayMode: AlertDisplayMode, focusSourceOnDismiss: Bool = true, pushoverUnattendedAfterSeconds: Double? = nil) {
         flashMenuBarIcon()
         appSettings.playAlertSound()
-        let schedulePushover = pushoverUnattendedAfterSeconds.map { $0 > 0 } ?? false
-        let usePushover = schedulePushover && appSettings.mobileNotificationReady
+        let usePushover = (pushoverUnattendedAfterSeconds ?? 0) > 0 && appSettings.mobileNotificationReady
 
-        if let sec = pushoverUnattendedAfterSeconds, sec > 0 {
-            if appSettings.mobileNotificationReady {
-                AppLog.shared.info("pushover: scheduling escalation after \(sec, privacy: .public)s (credentials OK)")
-            } else {
-                AppLog.shared.notice("pushover: would escalate after \(sec, privacy: .public)s — not scheduling (mobile service off or token/user empty)")
-            }
-        } else {
-            AppLog.shared.debug("pushover: no escalation — delay nil or 0")
-        }
-
-        // Timed dismiss must not run before the Pushover timer: default 8s would cancel the card and
-        // invalidate Pushover; equal intervals also race. Extend auto-dismiss past the escalation delay.
+        // Extend auto-dismiss past the Pushover escalation delay so the timer can fire first.
         var effectiveDisplayMode = displayMode
         if usePushover, let sec = pushoverUnattendedAfterSeconds, case .timed(let timeout) = displayMode {
-            let minDismiss = max(timeout, sec) + 1
-            if minDismiss > timeout {
-                effectiveDisplayMode = .timed(seconds: minDismiss)
-                AppLog.shared.info("pushover: auto-dismiss extended \(timeout, privacy: .public)s → \(minDismiss, privacy: .public)s so escalation can run at \(sec, privacy: .public)s")
-            }
-        } else if usePushover, displayMode.isSticky {
-            AppLog.shared.info("pushover: display is sticky — escalation timer independent of auto-dismiss")
+            effectiveDisplayMode = .timed(seconds: max(timeout, sec) + 1)
         }
 
         FullScreenAlertWindow.show(
@@ -374,31 +354,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     private func sendPushoverEscalation(for record: NotificationRecord) {
-        AppLog.shared.info("pushover: sendPushoverEscalation entry app=\(record.appIdentifier, privacy: .public) title=\(record.title.prefix(120), privacy: .public)")
-        guard appSettings.mobileNotificationReady else {
-            AppLog.shared.notice("pushover: abort — mobileNotificationReady false")
-            return
-        }
-        let token = appSettings.pushoverAppToken
-        let user = appSettings.pushoverUserKey
-        guard !token.isEmpty, !user.isEmpty else {
-            AppLog.shared.notice("pushover: abort — empty token or user key after ready check")
-            return
-        }
+        guard appSettings.mobileNotificationReady else { return }
         let title = record.title.isEmpty ? "Lumesent" : record.title
-        var parts: [String] = []
-        if !record.subtitle.isEmpty { parts.append(record.subtitle) }
-        if !record.body.isEmpty { parts.append(record.body) }
+        let parts = [record.subtitle, record.body].filter { !$0.isEmpty }
         let message = parts.isEmpty ? "Full-screen alert is still showing (unattended)." : parts.joined(separator: "\n")
-        AppLog.shared.info("pushover: POST api.pushover.net titleLen=\(title.count, privacy: .public) messageLen=\(message.count, privacy: .public) tokenLen=\(token.count, privacy: .public) userKeyLen=\(user.count, privacy: .public)")
-        PushoverClient.send(appToken: token, userKey: user, title: title, message: message) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    AppLog.shared.info("pushover: API success (200) title=\(record.title.prefix(80), privacy: .public)")
-                case .failure(let err):
-                    AppLog.shared.error("pushover: API failure \(err.localizedDescription, privacy: .public)")
-                }
+        PushoverClient.send(appToken: appSettings.pushoverAppToken, userKey: appSettings.pushoverUserKey, title: title, message: message) { result in
+            if case .failure(let err) = result {
+                AppLog.shared.error("pushover: API failure \(err.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -453,8 +415,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             postNativeNotification(record, focusSourceOnDismiss: focusSource)
         case .fullscreen:
             let pushoverSec = pushoverUnattendedSecondsForExternalFullscreen()
-            let pushLog = pushoverSec.map { String($0) } ?? "off"
-            AppLog.shared.info("external fullscreen: pushoverUnattendedAfter=\(pushLog, privacy: .public) (CLI/socket — not from filter rules)")
             presentAlert(for: record, displayMode: ext.resolvedDisplayMode, focusSourceOnDismiss: focusSource, pushoverUnattendedAfterSeconds: pushoverSec)
         }
     }
@@ -550,21 +510,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         }
         let focusSource = activeRules.contains { $0.focusSourceOnDismiss }
 
-        let pushoverCandidates = activeRules.compactMap { rule -> Double? in
-            rule.pushoverUnattendedAfterSeconds > 0 ? rule.pushoverUnattendedAfterSeconds : nil
-        }
-        let mergedPushoverSeconds: Double? = pushoverCandidates.isEmpty ? nil : pushoverCandidates.min()
-        if mergedPushoverSeconds != nil, !appSettings.mobileNotificationReady {
-            AppLog.shared.notice("MATCH — rule requests phone escalation but Pushover is off or keys missing; alert only")
-        }
-        if !pushoverCandidates.isEmpty {
-            let withPush = activeRules.filter { $0.pushoverUnattendedAfterSeconds > 0 }
-            let perRule = withPush.map { "\($0.id.uuidString.prefix(8)):\($0.pushoverUnattendedAfterSeconds)s" }.joined(separator: ",")
-            AppLog.shared.info("pushover: merged rule delays min=\(mergedPushoverSeconds.map { String($0) } ?? "n/a", privacy: .public) from [\(perRule, privacy: .public)]")
-        }
+        let pushoverCandidates = activeRules.compactMap { $0.pushoverUnattendedAfterSeconds > 0 ? $0.pushoverUnattendedAfterSeconds : nil }
+        let mergedPushoverSeconds: Double? = pushoverCandidates.min()
 
-        let pushoverAfterLog = mergedPushoverSeconds.map { String($0) } ?? "off"
-        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public) focusSource=\(focusSource, privacy: .public) activeRules=\(activeRules.count, privacy: .public) pushoverAfter=\(pushoverAfterLog, privacy: .public) mobileReady=\(self.appSettings.mobileNotificationReady, privacy: .public)")
+        AppLog.shared.info("MATCH — showing alert: title=\(record.title, privacy: .public) displayMode=\(String(describing: displayMode), privacy: .public) focusSource=\(focusSource, privacy: .public) activeRules=\(activeRules.count, privacy: .public)")
         presentAlert(for: record, displayMode: displayMode, focusSourceOnDismiss: focusSource, pushoverUnattendedAfterSeconds: mergedPushoverSeconds)
     }
 

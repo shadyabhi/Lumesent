@@ -28,8 +28,7 @@ final class NotificationMonitor: ObservableObject {
 
     init(onNewNotification: @escaping (NotificationRecord) -> Void) {
         self.onNewNotification = onNewNotification
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        self.dbPath = "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
+        self.dbPath = FileLocations.notificationDBPath
     }
 
     func start() {
@@ -165,7 +164,6 @@ final class NotificationMonitor: ObservableObject {
             foundAny = true
             fetchCount += 1
             lastSeenRecId = recId
-            AppLog.shared.info("fetched notification rec_id=\(recId, privacy: .public) app=\(appIdentifier, privacy: .public) title=\(title, privacy: .public) subtitle=\(subtitle, privacy: .public) body=\(body.prefix(80), privacy: .public) delivered=\(deliveredDate.description, privacy: .public)")
             let callback = onNewNotification
             DispatchQueue.main.async { callback(record) }
         }
@@ -264,7 +262,6 @@ final class NotificationMonitor: ObservableObject {
             self.dbQueue.async { [weak self] in
                 guard let self else { return }
                 if self.db == nil {
-                    AppLog.shared.debug("fallback timer: DB not open, attempting reconnect")
                     self.tryOpenDatabase()
                     if self.db != nil {
                         self.initializeLastSeenIdIfNeeded()

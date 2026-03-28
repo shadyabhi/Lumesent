@@ -10,6 +10,11 @@ enum FileLocations {
 
     static let defaultSocketPath: String = appSupportDirectory.appendingPathComponent("notify.sock").path
 
+    static let notificationDBPath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/Library/Group Containers/group.com.apple.usernoted/db2/db"
+    }()
+
     static func saveJSON<T: Encodable>(_ value: T, to url: URL, label: String) {
         DispatchQueue.global(qos: .utility).async {
             do {

@@ -5,7 +5,6 @@ enum PushoverClient {
 
     /// Sends a notification via Pushover. Call from any queue; completion is invoked on a background URLSession queue.
     static func send(appToken: String, userKey: String, title: String, message: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        AppLog.shared.debug("pushover: URLSession POST \(endpoint.host ?? "api.pushover.net", privacy: .public)")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -29,7 +28,6 @@ enum PushoverClient {
                 return
             }
             if (200...299).contains(http.statusCode) {
-                AppLog.shared.debug("pushover: HTTP \(http.statusCode, privacy: .public) OK bytes=\(data?.count ?? 0, privacy: .public)")
                 completion(.success(()))
                 return
             }
