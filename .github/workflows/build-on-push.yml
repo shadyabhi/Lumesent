@@ -49,7 +49,7 @@ jobs:
 
       - name: Build signed DMG
         env:
-          VERSION: head.${{ github.run_id }}
+          VERSION: ${{ github.run_id }}
           SHORT_VERSION: head-${{ github.sha }}
         run: |
           make dmg
@@ -99,7 +99,7 @@ jobs:
           # for human identification.
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/head/${DMG_FILE}"
           PUB_DATE=$(date -R)
-          HEAD_VERSION="head.${{ github.run_id }}"
+          HEAD_VERSION="${{ github.run_id }}"
           HEAD_SHORT_VERSION="head-${SHORT_SHA}"
 
           scripts/generate-appcast.sh \

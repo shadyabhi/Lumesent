@@ -4,8 +4,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/.build/release"
 APP="$REPO_ROOT/Lumesent.app"
-VERSION="${VERSION:-$(cd "$REPO_ROOT" && printf '%s-%s' "$(date +%Y%m%d)" "$(git describe --always --dirty 2>/dev/null || echo unknown)")}"
-SHORT_VERSION="${SHORT_VERSION:-$VERSION}"
+VERSION="${VERSION:-0}"
+SHORT_VERSION="${SHORT_VERSION:-dev-$(cd "$REPO_ROOT" && git describe --always --dirty 2>/dev/null || echo unknown)}"
 
 # macOS privacy (Full Disk Access, Accessibility) follows the app's signing identity. Ad-hoc (`-`)
 # effectively changes identity every rebuild (new CDHash), so TCC no longer matches. Use any

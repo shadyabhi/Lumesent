@@ -58,10 +58,10 @@ enum UpdateChannel: String, Codable, CaseIterable {
         }
     }
 
-    /// Head builds have CFBundleVersion set to "head" by CI.
+    /// Head builds have CFBundleShortVersionString starting with "head-" (e.g. "head-ae8607b").
     static var defaultForCurrentBuild: UpdateChannel {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-        return version.hasPrefix("head") ? .head : .stable
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        return shortVersion.hasPrefix("head") ? .head : .stable
     }
 }
 
