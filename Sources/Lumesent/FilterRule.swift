@@ -92,19 +92,21 @@ struct FilterRule: Identifiable, Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // id and appIdentifier are truly required — a rule without them is meaningless
         id = try c.decode(UUID.self, forKey: .id)
         appIdentifier = try c.decode(String.self, forKey: .appIdentifier)
+        // Everything else uses decodeIfPresent with sensible defaults for forward-compatibility
         appOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .appOperator) ?? .contains
-        titleContains = try c.decode(String.self, forKey: .titleContains)
-        titleOperator = try c.decode(MatchOperator.self, forKey: .titleOperator)
+        titleContains = try c.decodeIfPresent(String.self, forKey: .titleContains) ?? ""
+        titleOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .titleOperator) ?? .contains
         subtitleContains = try c.decodeIfPresent(String.self, forKey: .subtitleContains) ?? ""
         subtitleOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .subtitleOperator) ?? .contains
-        bodyContains = try c.decode(String.self, forKey: .bodyContains)
-        bodyOperator = try c.decode(MatchOperator.self, forKey: .bodyOperator)
-        isEnabled = try c.decode(Bool.self, forKey: .isEnabled)
-        label = try c.decode(String.self, forKey: .label)
+        bodyContains = try c.decodeIfPresent(String.self, forKey: .bodyContains) ?? ""
+        bodyOperator = try c.decodeIfPresent(MatchOperator.self, forKey: .bodyOperator) ?? .contains
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
         ruleDescription = try c.decodeIfPresent(String.self, forKey: .ruleDescription) ?? ""
-        displayMode = try c.decode(AlertDisplayMode.self, forKey: .displayMode)
+        displayMode = try c.decodeIfPresent(AlertDisplayMode.self, forKey: .displayMode) ?? .defaultTimed
         focusSourceOnDismiss = try c.decodeIfPresent(Bool.self, forKey: .focusSourceOnDismiss) ?? true
         cooldownSeconds = try c.decodeIfPresent(Double.self, forKey: .cooldownSeconds) ?? 60
         pushoverUnattendedAfterSeconds = try c.decodeIfPresent(Double.self, forKey: .pushoverUnattendedAfterSeconds) ?? 300

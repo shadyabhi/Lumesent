@@ -42,11 +42,30 @@ class RuleStore: ObservableObject {
             AppLog.shared.info("no rules file at \(self.fileURL.path, privacy: .public), starting with empty rules")
             return
         }
-        guard let decoded = try? JSONDecoder().decode([FilterRule].self, from: data) else {
+        // Try decoding the full array first (fast path).
+        if let decoded = try? JSONDecoder().decode([FilterRule].self, from: data) {
+            rules = decoded
+            AppLog.shared.info("loaded \(decoded.count, privacy: .public) rules from \(self.fileURL.path, privacy: .public)")
+            return
+        }
+        // Fall back to per-element decoding so one corrupt rule doesn't lose all rules.
+        guard let jsonArray = try? JSONDecoder().decode([LossyCodableArray<FilterRule>.Element].self, from: data) else {
             AppLog.shared.error("failed to decode rules from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
             return
         }
-        rules = decoded
-        AppLog.shared.info("loaded \(decoded.count, privacy: .public) rules from \(self.fileURL.path, privacy: .public)")
+        var recovered: [FilterRule] = []
+        var failed = 0
+        for element in jsonArray {
+            if let rule = element.value {
+                recovered.append(rule)
+            } else {
+                failed += 1
+            }
+        }
+        rules = recovered
+        AppLog.shared.error("loaded \(recovered.count, privacy: .public) rules, skipped \(failed, privacy: .public) corrupt entries from \(self.fileURL.path, privacy: .public)")
+        if !recovered.isEmpty {
+            save(feedbackMessage: "Rules recovered")
+        }
     }
 }

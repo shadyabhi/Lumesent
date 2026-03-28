@@ -205,8 +205,8 @@ class AppSettings: ObservableObject {
             return
         }
         dismissKey = decoded.dismissKey
-        showInDock = decoded.showInDock
-        alertPresentation = decoded.alertPresentation
+        showInDock = decoded.showInDock ?? false
+        alertPresentation = decoded.alertPresentation ?? .default
         pauseAlertsUntil = decoded.pauseAlertsUntil
         socketPath = decoded.socketPath ?? FileLocations.defaultSocketPath
         updateChannel = decoded.updateChannel ?? UpdateChannel.defaultForCurrentBuild
@@ -228,8 +228,8 @@ class AppSettings: ObservableObject {
 
     private struct SettingsData: Codable {
         var dismissKey: DismissKeyShortcut?
-        var showInDock: Bool = false
-        var alertPresentation: AlertPresentation = .default
+        var showInDock: Bool?
+        var alertPresentation: AlertPresentation?
         var pauseAlertsUntil: Date?
         var socketPath: String?
         var updateChannel: UpdateChannel?

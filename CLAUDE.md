@@ -18,7 +18,7 @@ The .app bundle (`make build` / `make run`) is required for stable permission gr
 
 No tests, no linter, no third-party dependencies. Links against system `sqlite3` (via Package.swift). Logging uses `os.Logger` via `AppLog`. Targets macOS 14+.
 
-View app logs: `/usr/bin/log show --predicate 'process == "logger"' --last 1h`
+View app logs: `Lumesent logs` (or `/usr/bin/log show --predicate 'subsystem == "com.shadyabhi.Lumesent"' --last 1h --info`). Do not use `process == "logger"` — that matches nothing useful for this app.
 
 ## Architecture
 
@@ -61,6 +61,11 @@ SettingsView is the largest file (~1900 lines): sidebar-based rules editor, unma
 ## Permissions
 
 The app requires **Full Disk Access** (notification DB readability) and **Accessibility** (AXObserver + hotkeys). `PermissionChecker` polls every 1s until both are granted. Missing permissions trigger onboarding dialogs at startup.
+
+## Development Guidelines
+
+- **JSON resilience**: The app must never crash due to invalid or incomplete JSON in persisted files (`rules.json`, `settings.json`, `history.json`). All `Codable` decoders use `decodeIfPresent` with sensible defaults for every field except true identifiers (`id`). Array loads use lossy per-element decoding so one corrupt entry doesn't discard the entire file. All file loads fall back to empty/default state on failure.
+- **Sensible defaults**: When adding new persisted fields, always make them optional in the `Codable` struct and provide a default via `decodeIfPresent(...) ?? defaultValue`. This ensures existing user data files load correctly after upgrades.
 
 ## Commit Format
 

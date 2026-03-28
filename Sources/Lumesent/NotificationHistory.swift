@@ -208,15 +208,25 @@ private extension NotificationHistory {
                 AppLog.shared.info("no history file at \(url.path, privacy: .public), starting empty")
                 return
             }
-            guard let decoded = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
+            // Try fast-path full-array decode, fall back to per-element lossy decode.
+            let decoded: [HistoryEntry]
+            if let full = try? JSONDecoder().decode([HistoryEntry].self, from: data) {
+                decoded = full
+            } else if let elements = try? JSONDecoder().decode([LossyCodableArray<HistoryEntry>.Element].self, from: data) {
+                let recovered = elements.compactMap(\.value)
+                let failed = elements.count - recovered.count
+                AppLog.shared.error("history: recovered \(recovered.count, privacy: .public) entries, skipped \(failed, privacy: .public) corrupt")
+                decoded = recovered
+            } else {
                 AppLog.shared.error("failed to decode history from \(url.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
                 return
             }
             let trimmed = decoded.count > Self.maxEntries ? Array(decoded.suffix(Self.maxEntries)) : decoded
+            let needsSave = decoded.count > Self.maxEntries || decoded.count != trimmed.count
             AppLog.shared.info("loaded \(trimmed.count, privacy: .public) history entries (\(trimmed.filter(\.matched).count, privacy: .public) matched)")
             DispatchQueue.main.async {
                 self.entries = trimmed
-                if decoded.count > Self.maxEntries {
+                if needsSave {
                     AppLog.shared.info("history trimmed from \(decoded.count, privacy: .public) to \(Self.maxEntries, privacy: .public)")
                     self.save()
                 }
