@@ -255,8 +255,15 @@ final class SelfSizingTextView: NSTextView {
 /// inline elements suitable for display in a dark alert card.
 enum MarkdownRenderer {
     static func render(_ markdown: String, fontSize: CGFloat, textColor: NSColor, maxWidth: CGFloat) -> NSAttributedString {
+        // Convert bare newlines to CommonMark hard line breaks (two trailing spaces)
+        // so that plain-text bodies with \n render each line separately.
+        let prepared = markdown.replacingOccurrences(
+            of: "(?<!  )\n(?!\n)",
+            with: "  \n",
+            options: .regularExpression
+        )
         guard let parsed = try? AttributedString(
-            markdown: markdown,
+            markdown: prepared,
             options: .init(interpretedSyntax: .full)
         ) else {
             return plain(markdown, fontSize: fontSize, textColor: textColor)
