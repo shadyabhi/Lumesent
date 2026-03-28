@@ -178,9 +178,17 @@ class NotificationHistory: ObservableObject {
         debouncedSave()
     }
 
+    /// Skip extra rows when Notification Center fires multiple AX callbacks for one user action (window created + destroyed, etc.).
+    private static let speedyDismissCoalesceInterval: TimeInterval = 3.0
+
     /// Logged when AX indicated Notification Center activity but no `record` row was read after burst retries (often dismissed before read).
     /// `axNotificationName` / `axElementLabel` come from the Accessibility callback (e.g. window created vs destroyed; optional UI string).
     func recordSpeedyDismissPlaceholder(axNotificationName: String, axElementLabel: String?) {
+        if let last = entries.last,
+           last.historyLabel == "speedy_dismiss",
+           Date().timeIntervalSince(last.date) < Self.speedyDismissCoalesceInterval {
+            return
+        }
         let ncBundle = "com.apple.notificationcenterui"
         let appName = AppNameCache.shared.name(for: ncBundle)
         let subtitle = "Trigger: \(Self.humanizeAXNotificationName(axNotificationName))"
