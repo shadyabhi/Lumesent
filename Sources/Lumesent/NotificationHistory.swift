@@ -86,6 +86,7 @@ enum HistoryQuickFilter: Int, CaseIterable, Identifiable {
     case matched
     case cooldown
     case downgraded
+    case paused
     case speedyDismiss
     case unmatched
 
@@ -97,6 +98,7 @@ enum HistoryQuickFilter: Int, CaseIterable, Identifiable {
         case .matched: return "Matched"
         case .cooldown: return "Cooldown"
         case .downgraded: return "Downgraded"
+        case .paused: return "Paused"
         case .speedyDismiss: return "Speedy dismiss"
         case .unmatched: return "Unmatched"
         }
@@ -108,6 +110,7 @@ enum HistoryQuickFilter: Int, CaseIterable, Identifiable {
         case .matched: return "bell.fill"
         case .cooldown: return "clock.arrow.circlepath"
         case .downgraded: return "arrow.down.right.circle"
+        case .paused: return "pause.circle"
         case .speedyDismiss: return "bolt.fill"
         case .unmatched: return "bell.slash"
         }
@@ -124,6 +127,8 @@ enum HistoryQuickFilter: Int, CaseIterable, Identifiable {
             return "Only entries that matched a rule but were skipped because that rule’s cooldown had not elapsed."
         case .downgraded:
             return "Only entries where a full-screen alert was downgraded or suppressed because the source window or pane was already visible."
+        case .paused:
+            return "Only entries that matched a rule but arrived while alerts were paused. These are replayed when alerts resume."
         case .speedyDismiss:
             return "Only placeholder entries for notifications the system removed from the database before Lumesent could read them."
         case .unmatched:
@@ -136,6 +141,7 @@ extension HistoryEntry {
     /// Mutually exclusive category for quick filters (priority matches `HistoryRow` badge order).
     var quickFilterCategory: HistoryQuickFilter {
         if historyLabel == "speedy_dismiss" { return .speedyDismiss }
+        if historyLabel == "paused" { return .paused }
         if sourceVisibleSuppressed { return .downgraded }
         if cooldownSuppressed { return .cooldown }
         if isDisplayableMatch { return .matched }

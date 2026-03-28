@@ -8,7 +8,7 @@ codesign-bootstrap:
 
 # open can fail with LS error -600 right after rebuild/kill; -n + absolute path + fallback helps.
 run: build
-	pkill -x Lumesent 2>/dev/null || true
+	pkill -x Lumesent 2>/dev/null && sleep 1 || true
 	open Lumesent.app
 
 # DMG target. Uses bundle.sh's identity resolution (Apple Development if available, ad-hoc otherwise).

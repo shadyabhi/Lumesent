@@ -1451,6 +1451,7 @@ struct HistoryTab: View {
         case .matched: return "Matched notifications"
         case .cooldown: return "Cooldown"
         case .downgraded: return "Downgraded (active window)"
+        case .paused: return "Paused"
         case .speedyDismiss: return "Speedy dismiss"
         case .unmatched: return "Unmatched notifications"
         }
@@ -1462,6 +1463,7 @@ struct HistoryTab: View {
         case .matched: return "No matched alerts yet"
         case .cooldown: return "No cooldown entries yet"
         case .downgraded: return "No downgraded entries yet"
+        case .paused: return "No paused entries yet"
         case .speedyDismiss: return "No speedy dismiss entries yet"
         case .unmatched: return "No unmatched notifications yet"
         }
@@ -1473,6 +1475,7 @@ struct HistoryTab: View {
         case .matched: return "Alerts that trigger your rules will appear here."
         case .cooldown: return "Matches skipped by rule cooldown will appear here."
         case .downgraded: return "Full-screen alerts downgraded while the source pane was visible will appear here."
+        case .paused: return "Notifications that arrived while alerts were paused will appear here."
         case .speedyDismiss: return "Notifications removed from the database before capture will appear here."
         case .unmatched: return "Notifications that did not match any rule will appear here."
         }
@@ -1484,6 +1487,7 @@ struct HistoryTab: View {
         case .matched: return "bell.slash"
         case .cooldown: return "clock.arrow.circlepath"
         case .downgraded: return "arrow.down.right.circle"
+        case .paused: return "pause.circle"
         case .speedyDismiss: return "bolt.slash"
         case .unmatched: return "bell.slash"
         }
@@ -1515,6 +1519,8 @@ struct HistoryRow: View {
                     Spacer()
                     if entry.historyLabel == "speedy_dismiss" {
                         StatusBadge(label: "speedy dismiss", color: .purple)
+                    } else if entry.historyLabel == "paused" {
+                        StatusBadge(label: "paused", color: .yellow)
                     } else if entry.sourceVisibleSuppressed {
                         StatusBadge(label: "fullscreen downgraded, active window", color: .blue)
                     } else if entry.cooldownSuppressed {

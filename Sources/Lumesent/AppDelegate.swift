@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var ruleStore: RuleStore!
     private var appSettings: AppSettings!
     private var notificationHistory: NotificationHistory!
+    private var notificationQueue: NotificationQueue!
     private var permissionChecker: PermissionChecker!
     private var notificationServer: NotificationServer!
     private var settingsWindow: NSWindow?
@@ -36,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             try? self?.updaterController.updater.start()
         }
         notificationHistory = NotificationHistory()
+        notificationQueue = NotificationQueue()
         filterEngine = FilterEngine(rules: ruleStore.rules)
         permissionChecker = PermissionChecker()
         AppLog.shared.info("loaded \(self.ruleStore.rules.count, privacy: .public) rules (\(self.ruleStore.rules.filter(\.isEnabled).count, privacy: .public) enabled), \(self.notificationHistory.entries.count, privacy: .public) history entries")
@@ -93,6 +95,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         updateMenuBarIcon()
 
         AppLog.shared.info("app startup complete — FDA=\(self.permissionChecker.hasFullDiskAccess, privacy: .public) AX=\(self.permissionChecker.hasAccessibility, privacy: .public) paused=\(self.appSettings.isPauseActive, privacy: .public)")
+
+        // Drain any queued notifications from a previous session if pause has expired.
+        if !appSettings.isPauseActive && !notificationQueue.isEmpty {
+            drainNotificationQueue()
+        }
 
         // Request notification permission early so the system prompt appears
         UNUserNotificationCenter.current().delegate = self
@@ -218,6 +225,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         rebuildMenu()
     }
 
+    private func remainingTime(_ future: Date) -> String {
+        let seconds = max(0, Int(future.timeIntervalSinceNow))
+        if seconds < 60 { return "<1m left" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m left" }
+        let hours = minutes / 60
+        let rem = minutes % 60
+        return rem > 0 ? "\(hours)h \(rem)m left" : "\(hours)h left"
+    }
+
     private func menuBarMenuSymbol(_ systemName: String) -> NSImage? {
         guard let base = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) else { return nil }
         return base.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
@@ -234,8 +251,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         menu.addItem(.separator())
 
         if appSettings.isPauseActive, let until = appSettings.pauseAlertsUntil {
+            let queueCount = notificationQueue.count
+            let queueSuffix = queueCount > 0 ? " · \(queueCount) queued" : ""
             let item = NSMenuItem(
-                title: "Alerts paused (\(relativeTime(until)))",
+                title: "Alerts paused (\(remainingTime(until))\(queueSuffix))",
                 action: nil,
                 keyEquivalent: "")
             item.isEnabled = false
@@ -244,10 +263,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             resume.target = self
             menu.addItem(resume)
         } else {
-            let p1 = NSMenuItem(title: "Pause alerts for 1 hour", action: #selector(pauseOneHour), keyEquivalent: "")
+            let p1 = NSMenuItem(title: "Pause alerts for 20 minutes", action: #selector(pause20Minutes), keyEquivalent: "")
             p1.target = self
             menu.addItem(p1)
-            let p2 = NSMenuItem(title: "Pause alerts until tomorrow", action: #selector(pauseUntilTomorrow), keyEquivalent: "")
+            let p2 = NSMenuItem(title: "Pause alerts for 1 hour", action: #selector(pauseOneHour), keyEquivalent: "")
             p2.target = self
             menu.addItem(p2)
         }
@@ -299,22 +318,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         updaterController.checkForUpdates(sender)
     }
 
-    @objc private func pauseOneHour() {
-        appSettings.pauseAlertsUntil = Date().addingTimeInterval(3600)
+    @objc private func pause20Minutes() {
+        appSettings.pauseAlertsUntil = Date().addingTimeInterval(20 * 60)
         appSettings.save()
     }
 
-    @objc private func pauseUntilTomorrow() {
-        var cal = Calendar.current
-        cal.timeZone = TimeZone.current
-        let start = cal.startOfDay(for: Date().addingTimeInterval(86400))
-        appSettings.pauseAlertsUntil = start
+    @objc private func pauseOneHour() {
+        appSettings.pauseAlertsUntil = Date().addingTimeInterval(3600)
         appSettings.save()
     }
 
     @objc private func resumeAlerts() {
         appSettings.pauseAlertsUntil = nil
         appSettings.save()
+        drainNotificationQueue()
+    }
+
+    private func drainNotificationQueue() {
+        let queued = notificationQueue.drainAll()
+        guard !queued.isEmpty else { return }
+        AppLog.shared.info("draining \(queued.count, privacy: .public) queued notifications")
+
+        for entry in queued {
+            if let ext = entry.externalNotification {
+                // External notifications bypass rules — replay directly.
+                let record = NotificationRecord.fromExternal(ext)
+                notificationHistory.record(record, matched: true, matchedRuleIds: [])
+                presentExternalAlert(ext, record: record, focusSource: ext.resolvedFocusSource)
+            } else {
+                // Re-create a lightweight record and re-run through the normal handler
+                // so current rules, cooldowns, and dedup apply.
+                let record = NotificationRecord(
+                    id: Int64.random(in: Int64.min ..< 0),
+                    appIdentifier: entry.appIdentifier,
+                    title: entry.title,
+                    subtitle: entry.subtitle,
+                    body: entry.body,
+                    deliveredDate: entry.date
+                )
+                handleNewNotification(record)
+            }
+        }
     }
 
     private func flashMenuBarIcon() {
@@ -392,8 +436,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let record = NotificationRecord.fromExternal(ext)
         AppLog.shared.info("external notification: title=\(record.title, privacy: .public) app=\(record.appName, privacy: .public) alertType=\(ext.alertType ?? "fullscreen", privacy: .public) displayMode=\(String(describing: ext.displayMode), privacy: .public)")
         guard !appSettings.isPauseActive else {
-            notificationHistory.record(record, matched: true, matchedRuleIds: [])
-            AppLog.shared.debug("skipped external alert (paused)")
+            notificationHistory.record(record, matched: true, matchedRuleIds: [], historyLabel: "paused")
+            notificationQueue.enqueue(record: record, matchedRuleIds: [], externalNotification: ext)
             return
         }
         let focus = ext.resolvedFocusSource
@@ -476,9 +520,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let matchedIds = matchedRules.map(\.id)
         AppLog.shared.info("\(matchedRules.count, privacy: .public) rule(s) matched for app=\(record.appIdentifier, privacy: .public) title=\(record.title, privacy: .public): \(matchedIds.map { $0.uuidString }, privacy: .public)")
 
+        // If pause just expired, drain any queued notifications first.
+        if !appSettings.isPauseActive && !notificationQueue.isEmpty {
+            drainNotificationQueue()
+        }
+
         guard !appSettings.isPauseActive else {
-            notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds)
-            AppLog.shared.debug("skipped alert (paused until \(String(describing: self.appSettings.pauseAlertsUntil), privacy: .public)): \(record.title, privacy: .public)")
+            notificationHistory.record(record, matched: true, matchedRuleIds: matchedIds, historyLabel: "paused")
+            notificationQueue.enqueue(record: record, matchedRuleIds: matchedIds)
             return
         }
         if shouldSuppressDuplicate(record) {
