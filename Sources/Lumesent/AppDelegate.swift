@@ -54,8 +54,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             onNewNotification: { [weak self] record in
                 self?.handleNewNotification(record)
             },
-            onMissedReadAfterBurst: { [weak self] in
-                self?.notificationHistory.recordSpeedyDismissPlaceholder()
+            onMissedReadAfterBurst: { [weak self] axName, axLabel in
+                self?.notificationHistory.recordSpeedyDismissPlaceholder(axNotificationName: axName, axElementLabel: axLabel)
             }
         )
         monitor.start()

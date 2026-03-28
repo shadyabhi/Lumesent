@@ -179,13 +179,21 @@ class NotificationHistory: ObservableObject {
     }
 
     /// Logged when AX indicated Notification Center activity but no `record` row was read after burst retries (often dismissed before read).
-    func recordSpeedyDismissPlaceholder() {
+    /// `axNotificationName` / `axElementLabel` come from the Accessibility callback (e.g. window created vs destroyed; optional UI string).
+    func recordSpeedyDismissPlaceholder(axNotificationName: String, axElementLabel: String?) {
+        let ncBundle = "com.apple.notificationcenterui"
+        let appName = AppNameCache.shared.name(for: ncBundle)
+        let subtitle = "Trigger: \(Self.humanizeAXNotificationName(axNotificationName))"
+        var body = "The system removed this notification from the database before Lumesent could capture it."
+        if let hint = axElementLabel, !hint.isEmpty {
+            body = "Accessibility: \(hint)\n\n\(body)"
+        }
         let entry = HistoryEntry(
-            appIdentifier: "unknown",
-            appName: "",
+            appIdentifier: ncBundle,
+            appName: appName,
             title: "Notification dismissed before read",
-            subtitle: "",
-            body: "The system removed this notification from the database before Lumesent could capture it.",
+            subtitle: subtitle,
+            body: body,
             date: Date(),
             matched: false,
             matchedRuleIds: [],
@@ -196,6 +204,14 @@ class NotificationHistory: ObservableObject {
             entries = Array(entries.suffix(Self.maxEntries))
         }
         debouncedSave()
+    }
+
+    private static func humanizeAXNotificationName(_ raw: String) -> String {
+        switch raw {
+        case "AXWindowCreated": return "Window created"
+        case "AXUIElementDestroyed": return "UI element removed"
+        default: return raw
+        }
     }
 
     func clearAll() {

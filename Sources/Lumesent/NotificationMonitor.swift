@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Combine
 import SQLite3
 
@@ -17,8 +18,8 @@ final class NotificationMonitor: ObservableObject {
     private static var didPromptForAccessibilityThisSession = false
 
     private let onNewNotification: (NotificationRecord) -> Void
-    /// Called on main when a burst of DB reads after an AX event found no new row (optional; db must be open).
-    private let onMissedReadAfterBurst: (() -> Void)?
+    /// Called on main when a burst of DB reads after an AX event found no new row (optional; db must be open). Arguments: AX notification name, optional title/value from the element.
+    private let onMissedReadAfterBurst: ((_ axNotificationName: String, _ axElementLabel: String?) -> Void)?
     private var db: OpaquePointer?
     private var lastSeenRecId: Int64 = 0
     private var didPrimeLastSeenId = false
@@ -30,8 +31,13 @@ final class NotificationMonitor: ObservableObject {
 
     /// Coalesces overlapping AX bursts: incremented each time we schedule a new burst.
     private var axBurstGeneration: UInt64 = 0
+    /// AX context for each burst generation (for speedy-dismiss placeholder text).
+    private var burstAXContextByGeneration: [UInt64: (name: String, label: String?)] = [:]
 
-    init(onNewNotification: @escaping (NotificationRecord) -> Void, onMissedReadAfterBurst: (() -> Void)? = nil) {
+    init(
+        onNewNotification: @escaping (NotificationRecord) -> Void,
+        onMissedReadAfterBurst: ((_ axNotificationName: String, _ axElementLabel: String?) -> Void)? = nil
+    ) {
         self.onNewNotification = onNewNotification
         self.onMissedReadAfterBurst = onMissedReadAfterBurst
         self.dbPath = FileLocations.notificationDBPath
@@ -194,31 +200,63 @@ final class NotificationMonitor: ObservableObject {
     }
 
     /// Staggered reads after Notification Center AX events (commit latency vs fast dismiss). Coalesces rapid AX callbacks via `axBurstGeneration`.
-    private func scheduleAccessibilityBurstFetch() {
+    private func scheduleAccessibilityBurstFetch(axNotification: CFString, axElement: AXUIElement) {
+        let axName = axNotification as String? ?? "AXNotification"
+        let axLabel = Self.bestEffortAXLabel(from: axElement)
         axBurstGeneration += 1
         let gen = axBurstGeneration
+        burstAXContextByGeneration[gen] = (name: axName, label: axLabel)
         /// Delays after each failed fetch. Five attempts: one immediate, then four delayed.
         let gaps: [TimeInterval] = [0.02, 0.02, 0.05, 0.08]
 
         func step(_ phase: Int) {
             dbQueue.async { [weak self] in
-                guard let self, gen == self.axBurstGeneration else { return }
+                guard let self else { return }
+                if gen != self.axBurstGeneration {
+                    self.burstAXContextByGeneration.removeValue(forKey: gen)
+                    return
+                }
                 let found = self.fetchNewNotificationsOnQueue()
-                if found { return }
+                if found {
+                    self.burstAXContextByGeneration.removeValue(forKey: gen)
+                    return
+                }
                 if phase < gaps.count {
                     self.dbQueue.asyncAfter(deadline: .now() + gaps[phase]) {
                         step(phase + 1)
                     }
                 } else {
-                    guard self.db != nil, self.onMissedReadAfterBurst != nil else { return }
+                    guard self.db != nil, self.onMissedReadAfterBurst != nil else {
+                        self.burstAXContextByGeneration.removeValue(forKey: gen)
+                        return
+                    }
                     DispatchQueue.main.async { [weak self] in
-                        guard let self, gen == self.axBurstGeneration else { return }
-                        self.onMissedReadAfterBurst?()
+                        guard let self else { return }
+                        guard gen == self.axBurstGeneration else {
+                            self.burstAXContextByGeneration.removeValue(forKey: gen)
+                            return
+                        }
+                        let ctx = self.burstAXContextByGeneration.removeValue(forKey: gen) ?? (name: "unknown", label: nil)
+                        self.onMissedReadAfterBurst?(ctx.name, ctx.label)
                     }
                 }
             }
         }
         step(0)
+    }
+
+    /// Best-effort string from the AX element that fired the notification (often empty for Notification Center UI).
+    private static func bestEffortAXLabel(from element: AXUIElement) -> String? {
+        let attributes = [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute]
+        for attr in attributes {
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, attr as CFString, &value) == .success else { continue }
+            if let s = value as? String {
+                let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty { return t }
+            }
+        }
+        return nil
     }
 
     // MARK: - Accessibility Observer
@@ -237,10 +275,10 @@ final class NotificationMonitor: ObservableObject {
         let element = AXUIElementCreateApplication(ncPid)
         var observer: AXObserver?
 
-        let callback: AXObserverCallback = { _, _, _, refcon in
+        let callback: AXObserverCallback = { _, element, notification, refcon in
             guard let refcon else { return }
             let monitor = Unmanaged<NotificationMonitor>.fromOpaque(refcon).takeUnretainedValue()
-            monitor.scheduleAccessibilityBurstFetch()
+            monitor.scheduleAccessibilityBurstFetch(axNotification: notification, axElement: element)
         }
 
         guard AXObserverCreate(ncPid, callback, &observer) == .success,
