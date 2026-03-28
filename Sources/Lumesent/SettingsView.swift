@@ -1459,7 +1459,9 @@ struct HistoryRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if entry.sourceVisibleSuppressed {
+                    if entry.historyLabel == "speedy_dismiss" {
+                        StatusBadge(label: "speedy dismiss", color: .purple)
+                    } else if entry.sourceVisibleSuppressed {
                         StatusBadge(label: "fullscreen downgraded, active window", color: .blue)
                     } else if entry.cooldownSuppressed {
                         StatusBadge(label: "cooldown", color: .orange)

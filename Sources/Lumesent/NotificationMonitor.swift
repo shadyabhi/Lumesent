@@ -17,6 +17,8 @@ final class NotificationMonitor: ObservableObject {
     private static var didPromptForAccessibilityThisSession = false
 
     private let onNewNotification: (NotificationRecord) -> Void
+    /// Called on main when a burst of DB reads after an AX event found no new row (optional; db must be open).
+    private let onMissedReadAfterBurst: (() -> Void)?
     private var db: OpaquePointer?
     private var lastSeenRecId: Int64 = 0
     private var didPrimeLastSeenId = false
@@ -26,8 +28,12 @@ final class NotificationMonitor: ObservableObject {
     /// Serial queue for all SQLite access — keeps db/lastSeenRecId off the main thread.
     private let dbQueue = DispatchQueue(label: "com.lumesent.notificationdb", qos: .userInitiated)
 
-    init(onNewNotification: @escaping (NotificationRecord) -> Void) {
+    /// Coalesces overlapping AX bursts: incremented each time we schedule a new burst.
+    private var axBurstGeneration: UInt64 = 0
+
+    init(onNewNotification: @escaping (NotificationRecord) -> Void, onMissedReadAfterBurst: (() -> Void)? = nil) {
         self.onNewNotification = onNewNotification
+        self.onMissedReadAfterBurst = onMissedReadAfterBurst
         self.dbPath = FileLocations.notificationDBPath
     }
 
@@ -187,6 +193,34 @@ final class NotificationMonitor: ObservableObject {
         return (title, subtitle, body)
     }
 
+    /// Staggered reads after Notification Center AX events (commit latency vs fast dismiss). Coalesces rapid AX callbacks via `axBurstGeneration`.
+    private func scheduleAccessibilityBurstFetch() {
+        axBurstGeneration += 1
+        let gen = axBurstGeneration
+        /// Delays after each failed fetch. Five attempts: one immediate, then four delayed.
+        let gaps: [TimeInterval] = [0.05, 0.05, 0.1, 0.2]
+
+        func step(_ phase: Int) {
+            dbQueue.async { [weak self] in
+                guard let self, gen == self.axBurstGeneration else { return }
+                let found = self.fetchNewNotificationsOnQueue()
+                if found { return }
+                if phase < gaps.count {
+                    self.dbQueue.asyncAfter(deadline: .now() + gaps[phase]) {
+                        step(phase + 1)
+                    }
+                } else {
+                    guard self.db != nil, self.onMissedReadAfterBurst != nil else { return }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, gen == self.axBurstGeneration else { return }
+                        self.onMissedReadAfterBurst?()
+                    }
+                }
+            }
+        }
+        step(0)
+    }
+
     // MARK: - Accessibility Observer
 
     private func startAccessibilityObserver() {
@@ -206,15 +240,7 @@ final class NotificationMonitor: ObservableObject {
         let callback: AXObserverCallback = { _, _, _, refcon in
             guard let refcon else { return }
             let monitor = Unmanaged<NotificationMonitor>.fromOpaque(refcon).takeUnretainedValue()
-            monitor.dbQueue.async {
-                let found = monitor.fetchNewNotificationsOnQueue()
-                if !found {
-                    // DB row may not be committed yet; retry once after a short delay.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        monitor.dbQueue.async { monitor.fetchNewNotificationsOnQueue() }
-                    }
-                }
-            }
+            monitor.scheduleAccessibilityBurstFetch()
         }
 
         guard AXObserverCreate(ncPid, callback, &observer) == .success,

@@ -50,9 +50,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             .sink { [weak self] _, _ in self?.syncPermissionGatedWindowLevels() }
             .store(in: &cancellables)
 
-        monitor = NotificationMonitor { [weak self] record in
-            self?.handleNewNotification(record)
-        }
+        monitor = NotificationMonitor(
+            onNewNotification: { [weak self] record in
+                self?.handleNewNotification(record)
+            },
+            onMissedReadAfterBurst: { [weak self] in
+                self?.notificationHistory.recordSpeedyDismissPlaceholder()
+            }
+        )
         monitor.start()
 
         monitor.$databaseStatus

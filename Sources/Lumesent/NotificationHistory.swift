@@ -13,6 +13,8 @@ struct HistoryEntry: Codable, Identifiable {
     var matchedRuleIds: [UUID] = []
     var cooldownSuppressed: Bool = false
     var sourceVisibleSuppressed: Bool = false
+    /// Optional UI/persistence label (e.g. `speedy_dismiss` when the system removed the notification before we read it).
+    var historyLabel: String?
 
     var displayAppName: String { appName.isEmpty ? appIdentifier : appName }
 
@@ -24,7 +26,7 @@ struct HistoryEntry: Codable, Identifiable {
         matched && !cooldownSuppressed && !sourceVisibleSuppressed
     }
 
-    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
+    init(appIdentifier: String, appName: String, title: String, subtitle: String = "", body: String, date: Date, matched: Bool = false, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false, historyLabel: String? = nil) {
         self.id = UUID()
         self.appIdentifier = appIdentifier
         self.appName = appName
@@ -36,6 +38,7 @@ struct HistoryEntry: Codable, Identifiable {
         self.matchedRuleIds = matchedRuleIds
         self.cooldownSuppressed = cooldownSuppressed
         self.sourceVisibleSuppressed = sourceVisibleSuppressed
+        self.historyLabel = historyLabel
     }
 
     init(from decoder: Decoder) throws {
@@ -61,12 +64,14 @@ struct HistoryEntry: Codable, Identifiable {
         }
         cooldownSuppressed = try c.decodeIfPresent(Bool.self, forKey: .cooldownSuppressed) ?? false
         sourceVisibleSuppressed = try c.decodeIfPresent(Bool.self, forKey: .sourceVisibleSuppressed) ?? false
+        historyLabel = try c.decodeIfPresent(String.self, forKey: .historyLabel)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, appIdentifier, appName, title, subtitle, body, date, matched
         case matchedRuleIds
         case cooldownSuppressed, sourceVisibleSuppressed
+        case historyLabel
     }
 
     /// Legacy key used only for migration from single-rule format.
@@ -87,7 +92,7 @@ class NotificationHistory: ObservableObject {
         load()
     }
 
-    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false) {
+    func record(_ notification: NotificationRecord, matched: Bool, matchedRuleIds: [UUID] = [], cooldownSuppressed: Bool = false, sourceVisibleSuppressed: Bool = false, historyLabel: String? = nil) {
         let entry = HistoryEntry(
             appIdentifier: notification.appIdentifier,
             appName: notification.appName,
@@ -98,7 +103,8 @@ class NotificationHistory: ObservableObject {
             matched: matched,
             matchedRuleIds: matchedRuleIds,
             cooldownSuppressed: cooldownSuppressed,
-            sourceVisibleSuppressed: sourceVisibleSuppressed
+            sourceVisibleSuppressed: sourceVisibleSuppressed,
+            historyLabel: historyLabel
         )
         entries.append(entry)
 
@@ -106,6 +112,26 @@ class NotificationHistory: ObservableObject {
             entries = Array(entries.suffix(Self.maxEntries))
         }
 
+        debouncedSave()
+    }
+
+    /// Logged when AX indicated Notification Center activity but no `record` row was read after burst retries (often dismissed before read).
+    func recordSpeedyDismissPlaceholder() {
+        let entry = HistoryEntry(
+            appIdentifier: "unknown",
+            appName: "",
+            title: "Notification dismissed before read",
+            subtitle: "",
+            body: "The system removed this notification from the database before Lumesent could capture it.",
+            date: Date(),
+            matched: false,
+            matchedRuleIds: [],
+            historyLabel: "speedy_dismiss"
+        )
+        entries.append(entry)
+        if entries.count > Self.maxEntries {
+            entries = Array(entries.suffix(Self.maxEntries))
+        }
         debouncedSave()
     }
 
