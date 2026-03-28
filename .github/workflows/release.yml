@@ -171,6 +171,7 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml" \
             "Version ${VERSION}" \
             "${VERSION}" \
+            "${VERSION}" \
             "$DMG_URL" \
             "$SPARKLE_SIG" \
             "$PUB_DATE"

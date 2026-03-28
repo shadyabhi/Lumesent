@@ -1,6 +1,6 @@
 #!/bin/bash
 # Generate a Sparkle appcast XML file.
-# Usage: generate-appcast.sh <output-file> <channel-title> <appcast-link> <item-title> <version> <dmg-url> <sparkle-sig> <pub-date>
+# Usage: generate-appcast.sh <output-file> <channel-title> <appcast-link> <item-title> <version> <short-version> <dmg-url> <sparkle-sig> <pub-date>
 set -euo pipefail
 
 OUTPUT="$1"
@@ -8,9 +8,10 @@ CHANNEL_TITLE="$2"
 APPCAST_LINK="$3"
 ITEM_TITLE="$4"
 VERSION="$5"
-DMG_URL="$6"
-SPARKLE_SIG="$7"
-PUB_DATE="$8"
+SHORT_VERSION="$6"
+DMG_URL="$7"
+SPARKLE_SIG="$8"
+PUB_DATE="$9"
 
 cat > "$OUTPUT" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
@@ -26,7 +27,7 @@ cat > "$OUTPUT" <<EOF
         ${SPARKLE_SIG}
         type="application/octet-stream" />
       <sparkle:version>${VERSION}</sparkle:version>
-      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:shortVersionString>${SHORT_VERSION}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
     </item>
   </channel>

@@ -5,6 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/.build/release"
 APP="$REPO_ROOT/Lumesent.app"
 VERSION="${VERSION:-$(cd "$REPO_ROOT" && printf '%s-%s' "$(date +%Y%m%d)" "$(git describe --always --dirty 2>/dev/null || echo unknown)")}"
+SHORT_VERSION="${SHORT_VERSION:-$VERSION}"
 
 # macOS privacy (Full Disk Access, Accessibility) follows the app's signing identity. Ad-hoc (`-`)
 # effectively changes identity every rebuild (new CDHash), so TCC no longer matches. Use any
@@ -67,7 +68,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BUILD_DIR/Lumesent" "$APP/Contents/MacOS/Lumesent"
-sed "s/__VERSION__/$VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
+sed -e "s/__VERSION__/$VERSION/g" -e "s/__SHORT_VERSION__/$SHORT_VERSION/g" "$REPO_ROOT/Resources/Info.plist" > "$APP/Contents/Info.plist"
 cp "$REPO_ROOT/Resources/PrivacyInfo.xcprivacy" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 cp "$REPO_ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 

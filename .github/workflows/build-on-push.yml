@@ -49,7 +49,8 @@ jobs:
 
       - name: Build signed DMG
         env:
-          VERSION: head
+          VERSION: head.${{ github.run_id }}
+          SHORT_VERSION: head-${{ github.sha }}
         run: |
           make dmg
           echo "── codesign verification ──"
@@ -93,15 +94,21 @@ jobs:
           Commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
 
           # Generate appcast for head channel
+          # sparkle:version uses run_id (monotonically increasing) so Sparkle
+          # can reliably detect newer builds. shortVersionString shows the SHA
+          # for human identification.
           DMG_URL="https://github.com/${{ github.repository }}/releases/download/head/${DMG_FILE}"
           PUB_DATE=$(date -R)
+          HEAD_VERSION="head.${{ github.run_id }}"
+          HEAD_SHORT_VERSION="head-${SHORT_SHA}"
 
           scripts/generate-appcast.sh \
             appcast-head.xml \
             "Lumesent Updates (Head)" \
             "https://github.com/${{ github.repository }}/releases/download/head/appcast-head.xml" \
             "Head (${SHORT_SHA})" \
-            "head-${SHORT_SHA}" \
+            "$HEAD_VERSION" \
+            "$HEAD_SHORT_VERSION" \
             "$DMG_URL" \
             "$SPARKLE_SIG" \
             "$PUB_DATE"
