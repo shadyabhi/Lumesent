@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$REPO_ROOT/Lumesent.app"
 VERSION="${VERSION:-$(cd "$REPO_ROOT" && echo "$(date +%Y%m%d)-$(git describe --always --dirty 2>/dev/null || echo 'unknown')")}"
-DMG_NAME="Lumesent-${VERSION}"
+DMG_NAME="Lumesent-${DMG_SUFFIX:-${VERSION}}"
 DMG_DIR="$REPO_ROOT/.build/dmg"
 DMG_PATH="$REPO_ROOT/$DMG_NAME.dmg"
 VOL_NAME="Lumesent"

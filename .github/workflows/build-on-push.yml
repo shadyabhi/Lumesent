@@ -51,6 +51,7 @@ jobs:
         env:
           VERSION: ${{ github.run_id }}
           SHORT_VERSION: head-${{ github.sha }}
+          DMG_SUFFIX: head
         run: |
           make dmg
           echo "── codesign verification ──"
