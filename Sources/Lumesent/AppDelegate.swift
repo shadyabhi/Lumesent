@@ -189,18 +189,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     @objc private func navigateToRulesActive() {
-        openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.rulesActive)
+        showSettings(tab: .rulesActive)
     }
 
     @objc private func navigateToHistory() {
-        openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.history)
+        showSettings(tab: .history)
     }
 
     @objc private func navigateToSettings() {
-        openSettings()
-        NotificationCenter.default.post(name: .lumesentNavigateToTab, object: SettingsSidebarItem.settings)
+        showSettings(tab: .settings)
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -473,10 +470,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
 
     @objc private func openSettings() {
+        showSettings(tab: .rulesActive)
+    }
+
+    private func showSettings(tab: SettingsSidebarItem) {
         if let window = settingsWindow {
             syncPermissionGatedWindowLevels()
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            NotificationCenter.default.post(name: .lumesentNavigateToTab, object: tab)
             return
         }
 
@@ -485,6 +487,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             appSettings: appSettings,
             history: notificationHistory,
             permissionChecker: permissionChecker,
+            initialTab: tab,
             onRulesChanged: { [weak self] updatedRules in
                 self?.filterEngine.rules = updatedRules
             },

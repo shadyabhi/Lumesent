@@ -35,7 +35,7 @@ struct SettingsView: View {
     let onRulesChanged: ([FilterRule]) -> Void
     let onTestRule: (FilterRule) -> Void
 
-    @State private var selectedSidebarItem: SettingsSidebarItem = .rulesActive
+    @State private var selectedSidebarItem: SettingsSidebarItem
     @StateObject private var logStore = LogStore()
 
     init(
@@ -43,6 +43,7 @@ struct SettingsView: View {
         appSettings: AppSettings,
         history: NotificationHistory,
         permissionChecker: PermissionChecker,
+        initialTab: SettingsSidebarItem = .rulesActive,
         onRulesChanged: @escaping ([FilterRule]) -> Void,
         onTestRule: @escaping (FilterRule) -> Void
     ) {
@@ -50,6 +51,7 @@ struct SettingsView: View {
         self.appSettings = appSettings
         self.history = history
         self.permissionChecker = permissionChecker
+        self._selectedSidebarItem = State(initialValue: initialTab)
         self.onRulesChanged = onRulesChanged
         self.onTestRule = onTestRule
     }
