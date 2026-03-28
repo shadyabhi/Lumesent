@@ -73,6 +73,7 @@ struct AlertCardView: View {
     @State private var appeared = false
     @State private var elapsedSeconds: Int = 0
     @State private var timer: Timer?
+    @State private var resolvedAppIcon: NSImage?
 
     private var titleSize: CGFloat { layout == .banner ? 18 : 24 }
     private var bodySize: CGFloat { layout == .banner ? 13 : 16 }
@@ -119,7 +120,10 @@ struct AlertCardView: View {
                 .padding(.top, 2)
         }
         .padding(layout == .banner ? 16 : 24)
-        .onAppear { startTimer() }
+        .onAppear {
+            startTimer()
+            resolvedAppIcon = Self.resolveAppIcon(for: card.notification.appIdentifier)
+        }
         .onDisappear { timer?.invalidate() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -147,7 +151,7 @@ struct AlertCardView: View {
 
     @ViewBuilder
     private var appIconView: some View {
-        if let icon = appIcon {
+        if let icon = resolvedAppIcon {
             Image(nsImage: icon)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -181,11 +185,9 @@ struct AlertCardView: View {
         )
     }
 
-    private var appIcon: NSImage? {
-        guard card.notification.appIdentifier != "external" else { return nil }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: card.notification.appIdentifier) else {
-            return nil
-        }
+    private static func resolveAppIcon(for bundleId: String) -> NSImage? {
+        guard bundleId != "external" else { return nil }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return nil }
         return NSWorkspace.shared.icon(forFile: url.path)
     }
 }

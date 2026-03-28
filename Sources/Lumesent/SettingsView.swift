@@ -1221,6 +1221,7 @@ struct RuleCard: View {
 
     @ViewBuilder
     private var ruleHistoryPreviewDisclosure: some View {
+        let matches = historyPreviewMatches
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 historyPreviewExpanded.toggle()
@@ -1236,7 +1237,7 @@ struct RuleCard: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("\(historyPreviewMatches.count) in last \(NotificationHistory.maxEntries)")
+                    Text("\(matches.count) in last \(NotificationHistory.maxEntries)")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
@@ -1248,34 +1249,30 @@ struct RuleCard: View {
             .help(historyPreviewExpanded ? "Hide history matches" : "Show history matches")
 
             if historyPreviewExpanded {
-                ruleHistoryPreviewInner
+                if matches.isEmpty {
+                    Text("Nothing in your saved history matches these filters yet. New notifications will match if they fit.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(matches.prefix(12))) { entry in
+                                MatchedNotificationRow(entry: entry)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 220)
                     .padding(.top, 8)
-            }
-        }
-    }
 
-    @ViewBuilder
-    private var ruleHistoryPreviewInner: some View {
-        if historyPreviewMatches.isEmpty {
-            Text("Nothing in your saved history matches these filters yet. New notifications will match if they fit.")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(historyPreviewMatches.prefix(12))) { entry in
-                        MatchedNotificationRow(entry: entry)
+                    if matches.count > 12 {
+                        Text("+ \(matches.count - 12) more")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
-            }
-            .frame(maxHeight: 220)
-
-            if historyPreviewMatches.count > 12 {
-                Text("+ \(historyPreviewMatches.count - 12) more")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }

@@ -85,10 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             }
             .store(in: &cancellables)
 
-        appSettings.$alertPresentation
-            .dropFirst()
-            .sink { [weak self] _ in self?.appSettings.save() }
-            .store(in: &cancellables)
+        // alertPresentation is saved by SettingsTab's .onChange handler; no Combine sink needed here.
 
         updateMenuBarIcon()
 

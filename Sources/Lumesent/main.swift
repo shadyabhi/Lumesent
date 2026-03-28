@@ -7,6 +7,17 @@ extension Notification.Name {
     static let lumesentDidPersistUserSettings = Notification.Name("com.shadyabhi.Lumesent.didPersistUserSettings")
 }
 
+extension NotificationCenter {
+    /// Posts a notification on the main thread, dispatching async if not already there.
+    func postOnMain(name: Notification.Name, object: Any?) {
+        if Thread.isMainThread {
+            post(name: name, object: object)
+        } else {
+            DispatchQueue.main.async { self.post(name: name, object: object) }
+        }
+    }
+}
+
 // ── CLI routing ──
 let args = CommandLine.arguments
 let subcommand = args.count > 1 ? args[1] : nil
@@ -129,10 +140,6 @@ if subcommand == "send" {
     let noFocusSource = args.contains("--no-focus-source")
     let sourceContext = SourceContext.detect()
 
-    // Auto-detect app name when --app-name is not provided:
-    // 1. Terminal app name from sourceContext (e.g. "iTerm2", "Terminal")
-    // 2. Parent process name (e.g. "zsh", "python3")
-    // 3. Falls back to "External" via resolvedAppName
     var appName = flagValue("--app-name")
     if appName == nil {
         if let bundleId = sourceContext?.terminalAppBundleId,
@@ -159,7 +166,7 @@ if subcommand == "send" {
         appName: appName,
         displayMode: flagValue("--display-mode"),
         alertType: flagValue("--alert-type"),
-        sourceContext: SourceContext.detect(),
+        sourceContext: sourceContext,
         focusSource: noFocusSource ? false : nil,
         sourceApp: flagValue("--source-app")
     )

@@ -141,33 +141,36 @@ final class FullScreenAlertWindow {
 
     // MARK: - Overlay Management
 
+    private static func makeOverlayWindow(screen: NSScreen, layout: AlertLayout) -> NSWindow {
+        let window = NSWindow(
+            contentRect: .zero,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.level = .screenSaver
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.ignoresMouseEvents = false
+
+        let gridView = AlertGridView(
+            model: gridModel,
+            layout: layout,
+            onDismissCard: { cardId in dismissCard(id: cardId) },
+            onDismissAll: { dismiss() }
+        )
+        window.contentView = NSHostingView(rootView: gridView)
+        window.setFrame(screen.frame, display: false)
+        window.alphaValue = 1
+        window.orderFrontRegardless()
+        return window
+    }
+
     private static func createOverlay(screens: [NSScreen], layout: AlertLayout, dismissKey: DismissKeyShortcut?) {
         for screen in screens {
-            let window = NSWindow(
-                contentRect: .zero,
-                styleMask: .borderless,
-                backing: .buffered,
-                defer: false
-            )
-            window.level = .screenSaver
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.hasShadow = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.ignoresMouseEvents = false
-
-            let gridView = AlertGridView(
-                model: gridModel,
-                layout: layout,
-                onDismissCard: { cardId in dismissCard(id: cardId) },
-                onDismissAll: { dismiss() }
-            )
-            window.contentView = NSHostingView(rootView: gridView)
-
-            // Always use full screen frame so the grid can center itself
-            window.setFrame(screen.frame, display: false)
-            window.alphaValue = 1
-            window.orderFrontRegardless()
+            let window = makeOverlayWindow(screen: screen, layout: layout)
             managed.append(Managed(window: window, layout: layout))
         }
 
@@ -226,29 +229,7 @@ final class FullScreenAlertWindow {
         // If screens were added, create new overlay windows
         if newScreens.count > managed.count {
             for screen in newScreens[managed.count...] {
-                let window = NSWindow(
-                    contentRect: .zero,
-                    styleMask: .borderless,
-                    backing: .buffered,
-                    defer: false
-                )
-                window.level = .screenSaver
-                window.backgroundColor = .clear
-                window.isOpaque = false
-                window.hasShadow = false
-                window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-                window.ignoresMouseEvents = false
-
-                let gridView = AlertGridView(
-                    model: gridModel,
-                    layout: currentLayout,
-                    onDismissCard: { cardId in dismissCard(id: cardId) },
-                    onDismissAll: { dismiss() }
-                )
-                window.contentView = NSHostingView(rootView: gridView)
-                window.setFrame(screen.frame, display: false)
-                window.alphaValue = 1
-                window.orderFrontRegardless()
+                let window = makeOverlayWindow(screen: screen, layout: currentLayout)
                 managed.append(Managed(window: window, layout: currentLayout))
             }
         }

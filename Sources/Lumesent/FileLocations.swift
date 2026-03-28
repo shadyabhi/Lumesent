@@ -20,4 +20,24 @@ enum FileLocations {
             }
         }
     }
+
+    /// Loads a JSON array with lossy per-element decoding: tries a fast full-array decode first,
+    /// then falls back to per-element recovery so one corrupt entry doesn't discard the entire file.
+    static func loadJSONArray<T: Decodable>(from url: URL, label: String) -> [T]? {
+        guard let data = try? Data(contentsOf: url) else {
+            AppLog.shared.info("no \(label, privacy: .public) file at \(url.path, privacy: .public), starting empty")
+            return nil
+        }
+        if let full = try? JSONDecoder().decode([T].self, from: data) {
+            return full
+        }
+        guard let elements = try? JSONDecoder().decode([LossyCodableArray<T>.Element].self, from: data) else {
+            AppLog.shared.error("failed to decode \(label, privacy: .public) from \(url.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
+            return nil
+        }
+        let recovered = elements.compactMap(\.value)
+        let failed = elements.count - recovered.count
+        AppLog.shared.error("\(label, privacy: .public): recovered \(recovered.count, privacy: .public) entries, skipped \(failed, privacy: .public) corrupt")
+        return recovered
+    }
 }

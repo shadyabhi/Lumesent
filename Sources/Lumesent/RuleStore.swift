@@ -16,14 +16,7 @@ class RuleStore: ObservableObject {
 
     func save(feedbackMessage: String = "Saved") {
         FileLocations.saveJSON(rules, to: fileURL, label: "rules")
-        let notify = {
-            NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: feedbackMessage)
-        }
-        if Thread.isMainThread {
-            notify()
-        } else {
-            DispatchQueue.main.async(execute: notify)
-        }
+        NotificationCenter.default.postOnMain(name: .lumesentDidPersistUserSettings, object: feedbackMessage)
     }
 
     func exportRulesJSON() throws -> Data {
@@ -38,34 +31,8 @@ class RuleStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else {
-            AppLog.shared.info("no rules file at \(self.fileURL.path, privacy: .public), starting with empty rules")
-            return
-        }
-        // Try decoding the full array first (fast path).
-        if let decoded = try? JSONDecoder().decode([FilterRule].self, from: data) {
-            rules = decoded
-            AppLog.shared.info("loaded \(decoded.count, privacy: .public) rules from \(self.fileURL.path, privacy: .public)")
-            return
-        }
-        // Fall back to per-element decoding so one corrupt rule doesn't lose all rules.
-        guard let jsonArray = try? JSONDecoder().decode([LossyCodableArray<FilterRule>.Element].self, from: data) else {
-            AppLog.shared.error("failed to decode rules from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
-            return
-        }
-        var recovered: [FilterRule] = []
-        var failed = 0
-        for element in jsonArray {
-            if let rule = element.value {
-                recovered.append(rule)
-            } else {
-                failed += 1
-            }
-        }
-        rules = recovered
-        AppLog.shared.error("loaded \(recovered.count, privacy: .public) rules, skipped \(failed, privacy: .public) corrupt entries from \(self.fileURL.path, privacy: .public)")
-        if !recovered.isEmpty {
-            save(feedbackMessage: "Rules recovered")
-        }
+        guard let loaded: [FilterRule] = FileLocations.loadJSONArray(from: fileURL, label: "rules") else { return }
+        rules = loaded
+        AppLog.shared.info("loaded \(loaded.count, privacy: .public) rules from \(self.fileURL.path, privacy: .public)")
     }
 }

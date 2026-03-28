@@ -185,14 +185,7 @@ class AppSettings: ObservableObject {
             pushoverUserKey: pushoverUserKey.isEmpty ? nil : pushoverUserKey
         )
         FileLocations.saveJSON(payload, to: fileURL, label: "settings")
-        let notify = {
-            NotificationCenter.default.post(name: .lumesentDidPersistUserSettings, object: "Saved")
-        }
-        if Thread.isMainThread {
-            notify()
-        } else {
-            DispatchQueue.main.async(execute: notify)
-        }
+        NotificationCenter.default.postOnMain(name: .lumesentDidPersistUserSettings, object: "Saved")
     }
 
     private func load() {
