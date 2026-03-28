@@ -270,16 +270,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     @objc private func checkForUpdates(_ sender: Any?) {
         // Menu bar apps (LSUIElement) need to temporarily become a regular app
         // so that Sparkle's update dialog appears in front of other windows.
+        // The activation policy is reverted back to .accessory by the Sparkle delegate
+        // callbacks (standardUserDriverDidReceiveUserAttention or didAbortWithError).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         updaterController.checkForUpdates(sender)
-
-        // Revert to accessory (menu bar only) after a delay so the dialog has time to appear
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            if !self.appSettings.showInDock {
-                NSApp.setActivationPolicy(.accessory)
-            }
-        }
     }
 
     @objc private func pauseOneHour() {
@@ -572,6 +567,9 @@ extension AppDelegate: SPUUpdaterDelegate {
         let nsError = error as NSError
         if nsError.domain == SUSparkleErrorDomain && nsError.code == Int(SUError.noUpdateError.rawValue) {
             AppLog.shared.info("Sparkle: already up to date")
+            if !appSettings.showInDock {
+                NSApp.setActivationPolicy(.accessory)
+            }
             return
         }
 
