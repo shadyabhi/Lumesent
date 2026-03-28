@@ -551,11 +551,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
 // MARK: - Sparkle updater delegate
 
+/// Always reports the appcast version as newer so Sparkle unconditionally
+/// offers the update. Version strings across channels (tags vs run-IDs) are
+/// not reliably comparable, so we skip the comparison entirely.
+private final class AlwaysNewerComparator: NSObject, SUVersionComparison {
+    func compareVersion(_ versionA: String, toVersion versionB: String) -> ComparisonResult {
+        // versionA = installed, versionB = appcast. Return .orderedAscending
+        // so Sparkle always considers the appcast version as newer.
+        .orderedAscending
+    }
+}
+
 extension AppDelegate: SPUUpdaterDelegate {
     func feedURLString(for updater: SPUUpdater) -> String? {
         let url = appSettings.updateChannel.feedURL.absoluteString
         AppLog.shared.info("Sparkle feed URL: \(url, privacy: .public) (channel: \(self.appSettings.updateChannel.rawValue, privacy: .public))")
         return url
+    }
+
+    func versionComparator(for updater: SPUUpdater) -> (any SUVersionComparison)? {
+        AlwaysNewerComparator()
     }
 
     func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) {

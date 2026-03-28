@@ -2096,6 +2096,9 @@ struct SettingsTab: View {
                     }
                     .onChange(of: appSettings.updateChannel) { _, _ in
                         appSettings.save()
+                        if let delegate = NSApp.delegate as? AppDelegate {
+                            delegate.updaterController.checkForUpdates(nil)
+                        }
                     }
                     .onChange(of: appSettings.updateCheckInterval) { _, newValue in
                         appSettings.save()
