@@ -213,6 +213,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         rebuildMenu()
     }
 
+    private func menuBarMenuSymbol(_ systemName: String) -> NSImage? {
+        guard let base = NSImage(systemSymbolName: systemName, accessibilityDescription: nil) else { return nil }
+        return base.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
+    }
+
     private func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
         menu.removeAllItems()
@@ -221,14 +226,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         let versionItem = NSMenuItem(title: "Lumesent v\(version)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false
         menu.addItem(versionItem)
-        menu.addItem(.separator())
-
-        let matchedCount = notificationHistory.entries.filter(\.isDisplayableMatch).count
-        let historyLabel = matchedCount == 0 ? "View History" : "View History (\(matchedCount) matched)"
-        let historyItem = NSMenuItem(title: historyLabel, action: #selector(navigateToHistory), keyEquivalent: "")
-        historyItem.target = self
-        menu.addItem(historyItem)
-
         menu.addItem(.separator())
 
         if appSettings.isPauseActive, let until = appSettings.pauseAlertsUntil {
@@ -252,22 +249,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
 
         menu.addItem(.separator())
 
+        let matchedCount = notificationHistory.entries.filter(\.isDisplayableMatch).count
+        let historyLabel = matchedCount == 0 ? "View History" : "View History (\(matchedCount) matched)"
+        let historyItem = NSMenuItem(title: historyLabel, action: #selector(navigateToHistory), keyEquivalent: "")
+        historyItem.target = self
+        historyItem.image = menuBarMenuSymbol("clock.arrow.circlepath")
+        menu.addItem(historyItem)
+
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
+        settingsItem.image = menuBarMenuSymbol("gearshape")
         menu.addItem(settingsItem)
 
         let logsItem = NSMenuItem(title: "Logs...", action: #selector(openLogs), keyEquivalent: "")
         logsItem.target = self
+        logsItem.image = menuBarMenuSymbol("doc.text")
         menu.addItem(logsItem)
 
         let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
         checkForUpdatesItem.target = self
+        checkForUpdatesItem.image = menuBarMenuSymbol("arrow.clockwise.circle")
         menu.addItem(checkForUpdatesItem)
 
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit Lumesent", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
+        quitItem.image = menuBarMenuSymbol("power")
         menu.addItem(quitItem)
     }
 
