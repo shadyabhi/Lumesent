@@ -255,11 +255,13 @@ final class SelfSizingTextView: NSTextView {
 /// inline elements suitable for display in a dark alert card.
 enum MarkdownRenderer {
     static func render(_ markdown: String, fontSize: CGFloat, textColor: NSColor, maxWidth: CGFloat) -> NSAttributedString {
-        // Convert bare newlines to CommonMark hard line breaks (two trailing spaces)
-        // so that plain-text bodies with \n render each line separately.
+        // Convert bare newlines to paragraph breaks so the CommonMark parser
+        // creates distinct paragraph blocks for each line.  Hard line breaks
+        // (two trailing spaces) aren't reliably preserved by Apple's
+        // AttributedString markdown parser, but paragraph breaks are.
         let prepared = markdown.replacingOccurrences(
-            of: "(?<!  )\n(?!\n)",
-            with: "  \n",
+            of: "(?<!\n)\n(?!\n)",
+            with: "\n\n",
             options: .regularExpression
         )
         guard let parsed = try? AttributedString(
@@ -273,9 +275,23 @@ enum MarkdownRenderer {
         let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.9, weight: .regular)
         let codeBg = NSColor.white.withAlphaComponent(0.12)
         let result = NSMutableAttributedString()
+        var lastParagraphIdentity: Int?
 
         for run in parsed.runs {
             let text = String(parsed[run.range].characters)
+
+            // Insert a newline between distinct paragraph-level blocks so
+            // that each original line appears on its own line in the alert.
+            if let intent = run.presentationIntent,
+               let paraComponent = intent.components.first(where: {
+                   if case .paragraph = $0.kind { return true }; return false
+               }) {
+                let pid = paraComponent.identity
+                if let prev = lastParagraphIdentity, pid != prev, result.length > 0 {
+                    result.append(NSAttributedString(string: "\n"))
+                }
+                lastParagraphIdentity = pid
+            }
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
 
