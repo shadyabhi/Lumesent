@@ -2621,15 +2621,18 @@ struct LogsTab: View {
     }
 
     private func logRow(_ entry: LogEntry) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        let fullLine = "\(Self.timeFormatter.string(from: entry.date))  \(entry.levelLabel)  \(entry.message)"
+        return HStack(alignment: .top, spacing: 8) {
             Text(Self.timeFormatter.string(from: entry.date))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
                 .frame(width: 85, alignment: .leading)
 
             Text(entry.levelLabel)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundStyle(levelColor(entry.level))
+                .textSelection(.enabled)
                 .frame(width: 48, alignment: .leading)
 
             Text(entry.message)
@@ -2642,6 +2645,12 @@ struct LogsTab: View {
         .padding(.vertical, 3)
         .padding(.horizontal, 4)
         .background(entry.isError ? Color.red.opacity(0.06) : Color.clear)
+        .contextMenu {
+            Button("Copy Line") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(fullLine, forType: .string)
+            }
+        }
     }
 
     private func levelColor(_ level: OSLogEntryLog.Level) -> Color {
