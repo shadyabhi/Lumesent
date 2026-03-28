@@ -27,8 +27,10 @@ final class FullScreenAlertWindow {
     private static var managed: [Managed] = []
     private static var keyMonitor: Any?
     private static var activationObserver: Any?
+    private static var screenChangeObserver: Any?
     private static var currentDismissKey: DismissKeyShortcut?
     private static var currentLayout: AlertLayout = .fullScreen
+    private static var currentScreenMode: AlertScreens = .main
 
     static func show(
         notification: NotificationRecord,
@@ -46,6 +48,7 @@ final class FullScreenAlertWindow {
                 return
             }
             currentLayout = presentation.layout
+            currentScreenMode = presentation.screens
             currentDismissKey = dismissKey
             createOverlay(screens: screens, layout: presentation.layout, dismissKey: dismissKey)
         }
@@ -144,6 +147,14 @@ final class FullScreenAlertWindow {
             managed.first?.window.orderFrontRegardless()
         }
 
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            resizeOverlayToCurrentScreens()
+        }
+
         if let dismissKey {
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if dismissKey.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) {
@@ -161,6 +172,58 @@ final class FullScreenAlertWindow {
         }
     }
 
+    private static func resizeOverlayToCurrentScreens() {
+        guard !managed.isEmpty else { return }
+        let newScreens = screens(for: currentScreenMode)
+        AppLog.shared.notice("screen parameters changed — resizing \(managed.count, privacy: .public) overlay(s) to \(newScreens.count, privacy: .public) screen(s)")
+
+        // Resize existing windows to match updated screen frames
+        for (i, m) in managed.enumerated() {
+            if i < newScreens.count {
+                m.window.setFrame(newScreens[i].frame, display: true)
+            }
+        }
+
+        // If screens were added, create new overlay windows
+        if newScreens.count > managed.count {
+            for screen in newScreens[managed.count...] {
+                let window = NSWindow(
+                    contentRect: .zero,
+                    styleMask: .borderless,
+                    backing: .buffered,
+                    defer: false
+                )
+                window.level = .screenSaver
+                window.backgroundColor = .clear
+                window.isOpaque = false
+                window.hasShadow = false
+                window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+                window.ignoresMouseEvents = false
+
+                let gridView = AlertGridView(
+                    model: gridModel,
+                    layout: currentLayout,
+                    onDismissCard: { cardId in dismissCard(id: cardId) },
+                    onDismissAll: { dismiss() }
+                )
+                window.contentView = NSHostingView(rootView: gridView)
+                window.setFrame(screen.frame, display: false)
+                window.alphaValue = 1
+                window.orderFrontRegardless()
+                managed.append(Managed(window: window, layout: currentLayout))
+            }
+        }
+
+        // If screens were removed, tear down extra windows
+        if newScreens.count < managed.count {
+            let extra = managed[newScreens.count...]
+            for m in extra {
+                m.window.orderOut(nil)
+            }
+            managed.removeSubrange(newScreens.count...)
+        }
+    }
+
     private static func teardownOverlay(lastFocusSource: Bool, lastSourceContext: SourceContext?, lastAppId: String?) {
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
@@ -169,6 +232,10 @@ final class FullScreenAlertWindow {
         if let observer = activationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
             activationObserver = nil
+        }
+        if let observer = screenChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            screenChangeObserver = nil
         }
 
         let copies = managed
