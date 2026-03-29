@@ -16,6 +16,12 @@ final class AlertGridModel: ObservableObject {
     }
 
     @Published var cards: [CardItem] = []
+    /// Cards that have been dismissed but not yet removed from the grid.
+    @Published var pendingDismissals: Set<UUID> = []
+
+    var visibleCards: [CardItem] {
+        cards.filter { !pendingDismissals.contains($0.id) }
+    }
 }
 
 final class FullScreenAlertWindow {
@@ -23,6 +29,9 @@ final class FullScreenAlertWindow {
         let window: NSWindow
         let layout: AlertLayout
     }
+
+    /// Seconds to wait after last dismissal before redrawing the grid.
+    private static let gridRedrawDebounceSeconds: TimeInterval = 5
 
     static let gridModel = AlertGridModel()
     private static var managed: [Managed] = []
@@ -32,6 +41,7 @@ final class FullScreenAlertWindow {
     private static var currentDismissKey: DismissKeyShortcut?
     private static var currentLayout: AlertLayout = .fullScreen
     private static var currentScreenMode: AlertScreens = .main
+    private static var gridRedrawTimer: Timer?
 
     static func show(
         notification: NotificationRecord,
@@ -86,25 +96,46 @@ final class FullScreenAlertWindow {
     }
 
     static func dismissCard(id: UUID) {
-        guard let idx = gridModel.cards.firstIndex(where: { $0.id == id }) else { return }
-        let card = gridModel.cards[idx]
+        guard let card = gridModel.cards.first(where: { $0.id == id }) else { return }
+        guard !gridModel.pendingDismissals.contains(id) else { return }
         card.timer?.invalidate()
         card.pushoverTimer?.invalidate()
-        gridModel.cards.remove(at: idx)
-        AppLog.shared.debug("alert card dismissed, \(gridModel.cards.count, privacy: .public) remaining")
+        gridModel.pendingDismissals.insert(id)
+        AppLog.shared.debug("alert card pending dismiss, \(gridModel.visibleCards.count, privacy: .public) visible")
 
-        if gridModel.cards.isEmpty {
+        if gridModel.visibleCards.isEmpty {
+            // All cards dismissed — flush immediately and tear down.
+            flushPendingDismissals()
             teardownOverlay(lastFocusSource: card.focusSourceOnDismiss, lastSourceContext: card.sourceContext, lastAppId: card.appIdentifier)
+        } else {
+            // Debounce grid redraw: reset timer on each dismissal.
+            gridRedrawTimer?.invalidate()
+            gridRedrawTimer = Timer.scheduledTimer(withTimeInterval: gridRedrawDebounceSeconds, repeats: false) { _ in
+                flushPendingDismissals()
+            }
         }
+    }
+
+    private static func flushPendingDismissals() {
+        gridRedrawTimer?.invalidate()
+        gridRedrawTimer = nil
+        let dismissed = gridModel.pendingDismissals
+        guard !dismissed.isEmpty else { return }
+        gridModel.pendingDismissals.removeAll()
+        gridModel.cards.removeAll { dismissed.contains($0.id) }
+        AppLog.shared.debug("grid redraw flushed \(dismissed.count, privacy: .public) cards, \(gridModel.cards.count, privacy: .public) remaining")
     }
 
     static func dismiss() {
         AppLog.shared.debug("alert dismiss all, \(gridModel.cards.count, privacy: .public) cards")
+        gridRedrawTimer?.invalidate()
+        gridRedrawTimer = nil
         let lastCard = gridModel.cards.last
         for card in gridModel.cards {
             card.timer?.invalidate()
             card.pushoverTimer?.invalidate()
         }
+        gridModel.pendingDismissals.removeAll()
         gridModel.cards.removeAll()
         teardownOverlay(
             lastFocusSource: lastCard?.focusSourceOnDismiss ?? false,

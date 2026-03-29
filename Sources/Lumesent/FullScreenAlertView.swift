@@ -28,6 +28,7 @@ struct AlertGridView: View {
                 spacing: 16
             ) {
                 ForEach(model.cards) { card in
+                    let dismissed = model.pendingDismissals.contains(card.id)
                     AlertCardView(
                         card: card,
                         layout: layout,
@@ -35,6 +36,8 @@ struct AlertGridView: View {
                     )
                     .frame(idealWidth: cardWidth, minHeight: cardMinHeight)
                     .frame(width: cardWidth)
+                    .opacity(dismissed ? 0 : 1)
+                    .allowsHitTesting(!dismissed)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.8).combined(with: .opacity),
                         removal: .scale(scale: 0.9).combined(with: .opacity)
@@ -61,7 +64,8 @@ struct AlertGridView: View {
     private var backgroundOpacity: Double {
         if model.cards.isEmpty { return 0 }
         if layout == .banner { return 0.3 }
-        return min(0.85, 0.4 + Double(model.cards.count) * 0.15)
+        let visibleCount = model.visibleCards.count
+        return min(0.85, 0.4 + Double(visibleCount) * 0.15)
     }
 }
 
