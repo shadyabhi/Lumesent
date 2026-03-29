@@ -6,6 +6,9 @@ struct DismissKeyShortcut: Codable, Equatable {
     var modifierFlags: UInt  // NSEvent.ModifierFlags.rawValue
     var displayName: String
 
+    /// Shift + "-" — the factory default dismiss shortcut.
+    static let defaultShortcut = DismissKeyShortcut(keyCode: 27, modifierFlags: 0x20000, displayName: "⇧-")
+
     static func from(event: NSEventShim) -> DismissKeyShortcut {
         DismissKeyShortcut(
             keyCode: event.keyCode,
@@ -115,7 +118,7 @@ enum AlertSoundName: String, Codable, CaseIterable {
 }
 
 class AppSettings: ObservableObject {
-    @Published var dismissKey: DismissKeyShortcut?
+    @Published var dismissKey: DismissKeyShortcut? = DismissKeyShortcut.defaultShortcut
     @Published var showInDock: Bool = false
     @Published var alertPresentation: AlertPresentation = .default
     /// When non-nil and in the future, matched alerts are suppressed.
@@ -208,7 +211,7 @@ class AppSettings: ObservableObject {
             AppLog.shared.error("failed to decode settings from \(self.fileURL.path, privacy: .public) (\(data.count, privacy: .public) bytes)")
             return
         }
-        dismissKey = decoded.dismissKey
+        dismissKey = decoded.dismissKey ?? DismissKeyShortcut.defaultShortcut
         showInDock = decoded.showInDock ?? false
         alertPresentation = decoded.alertPresentation ?? .default
         pauseAlertsUntil = decoded.pauseAlertsUntil

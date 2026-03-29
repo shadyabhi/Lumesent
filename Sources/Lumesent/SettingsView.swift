@@ -2340,14 +2340,14 @@ struct SettingsTab: View {
                         HStack(spacing: 12) {
                             KeyCaptureButton(shortcut: $appSettings.dismissKey)
 
-                            if appSettings.dismissKey != nil {
-                                Button("Clear") {
-                                    appSettings.dismissKey = nil
+                            if appSettings.dismissKey != DismissKeyShortcut.defaultShortcut {
+                                Button("Reset to Default") {
+                                    appSettings.dismissKey = DismissKeyShortcut.defaultShortcut
                                     appSettings.debouncedSave()
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
-                                .accessibilityLabel("Clear dismiss shortcut")
+                                .accessibilityLabel("Reset dismiss shortcut to default")
                             }
                         }
                     }
