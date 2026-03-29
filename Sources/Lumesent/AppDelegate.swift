@@ -113,10 +113,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
             name: .lumesentOpenSettings,
             object: nil)
 
-        if !permissionChecker.allGranted {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                self?.openSettings()
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, !self.permissionChecker.allGranted else { return }
+            self.openSettings()
         }
     }
 
