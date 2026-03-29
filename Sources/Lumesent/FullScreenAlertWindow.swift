@@ -176,9 +176,14 @@ final class FullScreenAlertWindow {
                 if dismissKey.matches(keyCode: event.keyCode, modifierFlags: UInt(event.modifierFlags.rawValue)) {
                     Self.dismiss()
                 }
-                // Block Cmd+Tab, Cmd+H, Cmd+Q while alert is showing
+                // Cmd+Q dismisses the alert
+                if event.modifierFlags.contains(.command) && event.keyCode == 12 {
+                    Self.dismiss()
+                    return nil
+                }
+                // Block Cmd+Tab, Cmd+H while alert is showing
                 if event.modifierFlags.contains(.command) {
-                    let blocked: Set<UInt16> = [48, 4, 12] // Tab, H, Q
+                    let blocked: Set<UInt16> = [48, 4] // Tab, H
                     if blocked.contains(event.keyCode) {
                         return nil
                     }
