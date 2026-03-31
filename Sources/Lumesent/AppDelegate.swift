@@ -20,6 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     private var cancellables = Set<AnyCancellable>()
     private var iconFlashTimer: Timer?
     var updaterController: SPUStandardUpdaterController!
+    /// Tracks whether the current update check was triggered by the user (menu click)
+    /// vs. Sparkle's automatic background schedule.
+    private var userInitiatedUpdateCheck = false
 
     private var lastDedup: (key: String, time: Date)?
     /// Tracks the last alert time per rule+content combination for cooldown suppression.
@@ -312,6 +315,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
         // so that Sparkle's update dialog appears in front of other windows.
         // The activation policy is reverted back to .accessory by the Sparkle delegate
         // callbacks (standardUserDriverWillFinishUpdateSession or didAbortWithError).
+        userInitiatedUpdateCheck = true
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         updaterController.checkForUpdates(sender)
@@ -693,6 +697,9 @@ extension AppDelegate: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        let wasUserInitiated = userInitiatedUpdateCheck
+        userInitiatedUpdateCheck = false
+
         let nsError = error as NSError
         if nsError.domain == SUSparkleErrorDomain && nsError.code == Int(SUError.noUpdateError.rawValue) {
             AppLog.shared.info("Sparkle: already up to date")
@@ -710,6 +717,13 @@ extension AppDelegate: SPUUpdaterDelegate {
         }
         for (key, value) in nsError.userInfo where key != NSUnderlyingErrorKey {
             AppLog.shared.error("Sparkle error info [\(key, privacy: .public)]: \(String(describing: value), privacy: .public)")
+        }
+
+        // Only show the error alert when the user explicitly checked for updates.
+        // Automatic background check failures should not block the app with a modal dialog.
+        guard wasUserInitiated else {
+            AppLog.shared.info("Sparkle: background update check failed, will retry later")
+            return
         }
 
         // Show alert to user with actionable details
@@ -759,6 +773,7 @@ extension AppDelegate: SPUStandardUserDriverDelegate {
     }
 
     func standardUserDriverWillFinishUpdateSession() {
+        userInitiatedUpdateCheck = false
         // Revert to accessory app after the user dismisses/skips the update dialog.
         if !appSettings.showInDock {
             NSApp.setActivationPolicy(.accessory)
