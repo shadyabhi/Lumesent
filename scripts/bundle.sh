@@ -60,7 +60,7 @@ if [[ "$SIGN_ID" != "-" ]]; then
   CS_EXTRA=(--timestamp=none)
 fi
 
-sign() { codesign --force --options runtime --sign "$SIGN_ID" "${CS_EXTRA[@]}" "$@"; }
+sign() { codesign --force --options runtime --sign "$SIGN_ID" ${CS_EXTRA[@]+"${CS_EXTRA[@]}"} "$@"; }
 
 echo "bundle.sh: Signing with: ${SIGN_ID}" >&2
 
