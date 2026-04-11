@@ -7,9 +7,38 @@ struct AlertGridView: View {
     let onDismissCard: (UUID) -> Void
     let onDismissAll: () -> Void
 
-    private var cardWidth: CGFloat { layout == .banner ? 340 : 400 }
     private var cardMinHeight: CGFloat { layout == .banner ? 200 : 280 }
-    private var maxColumns: Int { layout == .banner ? 2 : 3 }
+
+    /// Widen the card when any notification has a lot of text so long bodies
+    /// wrap onto fewer lines instead of growing tall enough to overflow the
+    /// screen vertically. All cards in the grid share the same width for
+    /// visual consistency.
+    private var cardWidth: CGFloat {
+        if layout == .banner { return 340 }
+        let longest = model.cards.map(Self.textLength(for:)).max() ?? 0
+        switch longest {
+        case ..<300:  return 400
+        case ..<800:  return 560
+        case ..<1500: return 720
+        default:      return 900
+        }
+    }
+
+    /// Reduce column count as cards get wider so the grid still fits the screen.
+    private var maxColumns: Int {
+        if layout == .banner { return 2 }
+        switch cardWidth {
+        case ..<500: return 3
+        case ..<650: return 2
+        default:     return 1
+        }
+    }
+
+    private static func textLength(for card: AlertGridModel.CardItem) -> Int {
+        card.notification.title.count
+            + card.notification.subtitle.count
+            + card.notification.body.count
+    }
 
     var body: some View {
         ZStack {
@@ -22,9 +51,10 @@ struct AlertGridView: View {
                     if !hasSticky { onDismissAll() }
                 }
 
+            let width = cardWidth
             let columns = max(1, min(model.cards.count, maxColumns))
             let gridContent = LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: 16), count: columns),
+                columns: Array(repeating: GridItem(.fixed(width), spacing: 16), count: columns),
                 spacing: 16
             ) {
                 ForEach(model.cards) { card in
@@ -32,10 +62,11 @@ struct AlertGridView: View {
                     AlertCardView(
                         card: card,
                         layout: layout,
+                        cardWidth: width,
                         onDismiss: { onDismissCard(card.id) }
                     )
-                    .frame(idealWidth: cardWidth, minHeight: cardMinHeight)
-                    .frame(width: cardWidth)
+                    .frame(idealWidth: width, minHeight: cardMinHeight)
+                    .frame(width: width)
                     .opacity(dismissed ? 0 : 1)
                     .allowsHitTesting(!dismissed)
                     .transition(.asymmetric(
@@ -72,6 +103,7 @@ struct AlertGridView: View {
 struct AlertCardView: View {
     let card: AlertGridModel.CardItem
     let layout: AlertLayout
+    let cardWidth: CGFloat
     let onDismiss: () -> Void
 
     @State private var appeared = false
@@ -183,7 +215,7 @@ struct AlertCardView: View {
             string: string,
             fontSize: fontSize,
             textColor: NSColor.white.withAlphaComponent(0.85),
-            maxWidth: (layout == .banner ? 340 : 400) - (layout == .banner ? 32 : 48)
+            maxWidth: cardWidth - (layout == .banner ? 32 : 48)
         )
     }
 
